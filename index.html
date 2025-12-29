@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>亚马逊 CGL 智能体 - 旗舰合规版</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <style>
+        body {
+            background-color: #F5F5F7;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        .apple-card {
+            background: white;
+            border-radius: 28px;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            transition: all 0.4s ease;
+        }
+
+        .apple-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+        }
+
+        .log-window {
+            background: #1d1d1f;
+            color: #00ff00;
+            font-family: ui-monospace, monospace;
+            font-size: 11px;
+            border-radius: 16px;
+            padding: 20px;
+        }
+
+        .modal-overlay {
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(4px);
+        }
+
+        .scan-line {
+            height: 2px;
+            background: #0071E3;
+            position: absolute;
+            width: 100%;
+            animation: scan 2s linear infinite;
+            box-shadow: 0 0 10px #0071E3;
+        }
+
+        @keyframes scan {
+            0% {
+                top: 0%
+            }
+
+            100% {
+                top: 100%
+            }
+        }
+
+        /* 隐藏滚动条 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // 专业千分号格式化
+        const fComm = (val) => {
+            if (val === undefined || val === null || isNaN(val)) return "0";
+            return new Intl.NumberFormat('en-US').format(val);
+        };
+
+        const DEFAULT_DB = [
+            { id: '11210', cat: '手动工具', cls: 'B', rate: 0.00065, min: 4500, keywords: 'tap,die,wrench,drill,bit' },
+            { id: '10905', cat: '非防护型工作服', cls: 'B', rate: 0.00065, min: 4500, keywords: 'glove,thermal,work clothes' }
+        ];
+
+        function App() {
+            const [view, setView] = useState('home');
+            const [db, setDb] = useState(() => JSON.parse(localStorage.getItem('cgl_db')) || DEFAULT_DB);
+            const [logs, setLogs] = useState(() => JSON.parse(localStorage.getItem('cgl_audit_logs')) || []);
+            const [exRate, setExRate] = useState(() => parseFloat(localStorage.getItem('cgl_ex_rate')) || 7.2);
+
+            const [revenueRaw, setRevenueRaw] = useState("1,000,000"); // USD
+            const [merchantResults, setMerchantResults] = useState([]);
+            const [pricingSummary, setPricingSummary] = useState(null);
+            const [deductibleType, setDeductibleType] = useState('10000');
+            const [coiStep, setCoiStep] = useState('idle');
+            const [modalFile, setModalFile] = useState(null);
+            const [lastUploadStats, setLastUploadStats] = useState(null);
+
+            const getRevenueNum = () => parseFloat(revenueRaw.replace(/,/g, '')) || 0;
+
+            useEffect(() => {
+                localStorage.setItem('cgl_db', JSON.stringify(db));
+                localStorage.setItem('cgl_audit_logs', JSON.stringify(logs));
+                localStorage.setItem('cgl_ex_rate', exRate);
+            }, [db, logs, exRate]);
+
+            const addLog = (type, detail, snapshot = null) => {
+                const entry = { id: Date.now(), time: new Date().toLocaleString(), type, detail, snapshot };
+                setLogs(prev => [entry, ...prev].slice(0, 50));
+            };
+
+            const processMerchantReport = (data) => {
+                const revNum = getRevenueNum();
+                const matchedItems = data.map(row => {
+                    const keys = Object.keys(row);
+                    const titleKey = keys.find(k => k.toLowerCase().includes('description')) ||
+                        keys.find(k => k.toLowerCase().includes('name')) ||
+                        keys.find(k => k.toLowerCase().includes('sku')) || keys[0];
+                    const title = row[titleKey] || "未知商品";
+
+                    const match = db.find(d => d.keywords.split(',').some(k =>
+                        String(title).toLowerCase().includes(k.trim().toLowerCase())
+                    )) || { id: '10000', cat: '普通百货/General MDSE', cls: 'B', rate: 0.00065, min: 4500 };
+
+                    return { title, ...match };
+                });
+
+                // 核心定价逻辑：从所有匹配项中提取最高的费率
+                const worstMatch = matchedItems.reduce((prev, curr) => (curr.rate > prev.rate) ? curr : prev, matchedItems[0]);
+
+                // 费率上浮逻辑 (无免赔则上浮 20%)
+                const finalRate = deductibleType === '0' ? worstMatch.rate * 1.2 : worstMatch.rate;
+                const finalMinRMB = deductibleType === '0' ? worstMatch.min * 1.2 : worstMatch.min;
+
+                // 计算详情
+                const elasticPremRMB = revNum * finalRate * exRate;
+                const totalPremRMB = Math.max(elasticPremRMB, finalMinRMB).toFixed(2);
+
+                setMerchantResults(matchedItems);
+                setPricingSummary({
+                    worstCat: worstMatch.cat,
+                    worstCls: worstMatch.cls,
+                    baseRate: worstMatch.rate,
+                    appliedRate: finalRate,
+                    appliedMin: finalMinRMB,
+                    elasticPrem: elasticPremRMB,
+                    totalPrem: totalPremRMB,
+                    isMinApplied: parseFloat(finalMinRMB) > elasticPremRMB
+                });
+            };
+
+            const handleMerchantUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    try {
+                        const wb = XLSX.read(evt.target.result, { type: 'binary' });
+                        const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+                        processMerchantReport(data);
+                    } catch (err) { alert("解析失败"); }
+                };
+                reader.readAsBinaryString(file);
+            };
+
+            const handleAdminUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    try {
+                        const wb = XLSX.read(evt.target.result, { type: 'binary' });
+                        const raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+                        const headerRow = raw.find(r => r.some(c => String(c).includes('Code') || String(c).includes('费率')));
+                        if (!headerRow) { alert("❌ 未找到表头行"); return; }
+                        const col = {
+                            code: headerRow.indexOf('Main Sub Category Code') !== -1 ? headerRow.indexOf('Main Sub Category Code') : 2,
+                            name: headerRow.indexOf('Main Sub Category') !== -1 ? headerRow.indexOf('Main Sub Category') : 3,
+                            rate: headerRow.indexOf('费率') !== -1 ? headerRow.indexOf('费率') : 6,
+                            min: headerRow.indexOf('最低保费') !== -1 ? headerRow.indexOf('最低保费') : 5
+                        };
+                        const newDb = raw.slice(raw.indexOf(headerRow) + 1).filter(r => r[col.code]).map(r => ({
+                            id: String(r[col.code]), cat: r[col.name] || '未命名', cls: 'B', rate: parseFloat(r[col.rate]) || 0.00065, min: parseFloat(r[col.min]) || 4500, keywords: r[col.name] || ''
+                        }));
+                        if (newDb.length > 0) {
+                            const oldStats = { count: db.length, avgRate: db.reduce((a, b) => a + b.rate, 0) / (db.length || 1) };
+                            const newStats = { count: newDb.length, avgRate: newDb.reduce((a, b) => a + b.rate, 0) / newDb.length };
+                            const diff = { count: newStats.count - oldStats.count, rateDiff: (((newStats.avgRate - oldStats.avgRate) / (oldStats.avgRate || 1)) * 100).toFixed(2) };
+                            setDb(newDb);
+                            setLastUploadStats({ ...newStats, diff, fileName: file.name, time: new Date().toLocaleString() });
+                            addLog('MASTER表同步', `文件: ${file.name} | 更新: ${newDb.length}条`, newDb);
+                            alert(`✅ 已同步 ${newDb.length} 条报价规则。`);
+                        }
+                    } catch (err) { alert("同步失败"); }
+                };
+                reader.readAsBinaryString(file);
+            };
+
+            return (
+                <div className="min-h-screen relative no-scrollbar">
+                    <nav className="p-6 bg-white border-b sticky top-0 z-40 flex justify-between items-center px-12">
+                        <div className="flex items-center gap-3 cursor-pointer" onClick={() => setView('home')}>
+                            <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center text-white font-black">A</div>
+                            <h1 className="text-xl font-bold tracking-tight">亚马逊 CGL 智能体</h1>
+                        </div>
+                        <button onClick={() => setView('admin')} className="text-xs font-bold text-gray-400 hover:text-blue-600 uppercase tracking-widest leading-none">Admin Portal</button>
+                    </nav>
+
+                    <main className="max-w-6xl mx-auto p-12">
+                        {view === 'home' && (
+                            <div className="py-16 space-y-20 animate-in fade-in duration-1000">
+                                <div className="space-y-6 text-center">
+                                    <h2 className="text-7xl font-black tracking-tighter leading-[0.9]">智能分类 <b>全店厘定</b></h2>
+                                    <p className="text-xl text-gray-400 max-w-2xl mx-auto font-medium">支持全量 SKU 自动化风险穿透，按“最高风险原则”自动锁定全店年度保费。</p>
+                                </div>
+                                <div className="grid md:grid-cols-2 gap-10">
+                                    <div onClick={() => setView('merchant')} className="apple-card p-16 cursor-pointer group">
+                                        <div className="text-4xl mb-8 group-hover:scale-110 transition-transform">📊</div>
+                                        <h3 className="text-3xl font-black mb-4">全店报价分析</h3>
+                                        <p className="text-gray-400 leading-relaxed">上传每月 SKU 销售报告，AI 自动判定最高风险等级，实时试算年度总成本。</p>
+                                    </div>
+                                    <div onClick={() => setView('coi')} className="apple-card p-16 cursor-pointer group">
+                                        <div className="text-4xl mb-8 group-hover:scale-110 transition-transform">🛡️</div>
+                                        <h3 className="text-3xl font-black mb-4">COI 凭证预审</h3>
+                                        <p className="text-gray-400 leading-relaxed">AI 检索保单关键条款，确保满足 Amazon $1M 限额及附加被保险人合规要求。</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {view === 'merchant' && (
+                            <div className="space-y-10 animate-in fade-in duration-700">
+                                <button onClick={() => setView('home')} className="text-blue-600 font-bold text-sm">← 返回主页</button>
+
+                                <div className="apple-card p-12 space-y-12">
+                                    <div className="grid md:grid-cols-3 gap-8">
+                                        <div className="md:col-span-2 space-y-4">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">该账户全店预计年度总销售额 (Total Annual Revenue)</label>
+                                            <div className="relative">
+                                                <span className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 font-bold text-3xl">$</span>
+                                                <input type="text" className="w-full pl-16 pr-8 py-6 rounded-[28px] bg-gray-50 border-none font-black text-4xl text-gray-900 focus:bg-white focus:ring-8 focus:ring-blue-500/5 outline-none transition-all" value={revenueRaw} onChange={e => setRevenueRaw(fComm(e.target.value.replace(/[^0-9]/g, '')))} />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-4">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">免赔额控制 (Deductible)</label>
+                                            <select className="w-full p-6 h-[88px] rounded-[28px] bg-gray-50 border-none font-black text-xl text-gray-900 focus:bg-white outline-none transition-all appearance-none cursor-pointer shadow-sm" value={deductibleType} onChange={e => setDeductibleType(e.target.value)}>
+                                                <option value="10000">10,000 美金 (常规)</option>
+                                                <option value="0">无免赔 (Nil)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div className="border-2 border-dashed border-gray-100 rounded-[40px] p-20 text-center hover:bg-blue-50/20 hover:border-blue-400 transition-all relative group">
+                                        <input type="file" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={handleMerchantUpload} />
+                                        <div className="space-y-4">
+                                            <div className="text-5xl group-hover:scale-110 transition-transform">📤</div>
+                                            <h4 className="text-xl font-black">放入店内所有计划投保的 SKU 风险分类表</h4>
+                                            <p className="text-gray-400 font-medium">系统将自动提取店内最高风险项进行全量保费对冲</p>
+                                        </div>
+                                    </div>
+
+                                    {pricingSummary && (
+                                        <div className="space-y-12 animate-in slide-in-from-bottom-6 duration-700">
+                                            <div className="relative group">
+                                                <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-[48px] blur-2xl opacity-20 transition duration-1000"></div>
+                                                <div className="relative bg-[#1d1d1f] p-12 rounded-[48px] text-white flex flex-col md:flex-row justify-between items-center gap-8">
+                                                    <div className="space-y-4 flex-1">
+                                                        <div className="inline-block px-3 py-1 bg-blue-500/20 text-blue-400 text-[10px] font-black rounded-full uppercase tracking-widest">Storewide Annual Obligation</div>
+                                                        <div className="flex items-baseline gap-3">
+                                                            <span className="text-4xl font-bold text-white/40">¥</span>
+                                                            <span className="text-[100px] font-black leading-none tracking-tighter tabular-nums">{fComm(pricingSummary.totalPrem)}</span>
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <p className="text-white/60 font-bold flex items-center gap-2">
+                                                                <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                                                                计算逻辑：全店预测 ${revenueRaw} x 最高费率 {(pricingSummary.appliedRate * 100).toFixed(3)}% x 汇率 {exRate}
+                                                            </p>
+                                                            {pricingSummary.isMinApplied && (
+                                                                <p className="text-orange-400 font-black text-xs uppercase tracking-widest">⚠️ 弹性试算额低于保底，当前已按最低保费 ¥{fComm(pricingSummary.appliedMin)} 计收</p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <div className="bg-white/5 p-8 rounded-[36px] min-w-[320px] space-y-4 border border-white/10">
+                                                        <p className="text-[10px] text-white/40 font-black uppercase tracking-widest border-b border-white/10 pb-4 mb-4">Risk Factor Analysis (费率驱动源)</p>
+                                                        <div>
+                                                            <p className="text-[10px] text-blue-400 font-black uppercase">全店风险定级</p>
+                                                            <p className="text-2xl font-black">Class {pricingSummary.worstCls}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[10px] text-blue-400 font-black uppercase">主要风险类目</p>
+                                                            <p className="text-lg font-bold leading-tight">{pricingSummary.worstCat}</p>
+                                                        </div>
+                                                        <div className="pt-4 flex justify-between items-end border-t border-white/10">
+                                                            <div><p className="text-[10px] text-white/40 font-black uppercase">报价汇率</p><p className="font-bold">{exRate}</p></div>
+                                                            <div className="text-right"><p className="text-[10px] text-white/40 font-black uppercase">适用免赔</p><p className="font-bold">{deductibleType === '0' ? 'Nil' : '$10K'}</p></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-6">
+                                                <div className="flex items-center gap-4 border-b pb-6">
+                                                    <h4 className="text-2xl font-black tracking-tight text-gray-900">店内产品风险归类清单 ({merchantResults.length} SKUs)</h4>
+                                                </div>
+                                                <div className="overflow-x-auto no-scrollbar">
+                                                    <table className="w-full text-xs text-left">
+                                                        <thead>
+                                                            <tr className="text-gray-400 font-black uppercase tracking-widest border-b">
+                                                                <th className="pb-6 px-4">ITEM / SKU TITLE</th>
+                                                                <th className="pb-6 px-4">MATCHED CATEGORY</th>
+                                                                <th className="pb-6 px-4 text-center">CLASS</th>
+                                                                <th className="pb-6 px-4 text-right">BASE RATE (USD)</th>
+                                                                <th className="pb-6 px-4 text-right">MIN PREM (RMB)</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y">
+                                                            {merchantResults.map((r, i) => (
+                                                                <tr key={i} className="hover:bg-blue-50/50 transition-colors">
+                                                                    <td className="py-6 px-4 font-bold text-gray-500 max-w-[300px] truncate">{r.title}</td>
+                                                                    <td className="py-6 px-4 font-black text-gray-900">{r.cat}</td>
+                                                                    <td className="py-6 px-4 text-center">
+                                                                        <span className={`px-2.5 py-1 rounded-md text-[10px] font-black ${r.cls === 'C' ? 'bg-orange-100 text-orange-700' : 'bg-blue-50 text-blue-700'}`}>{r.cls}</span>
+                                                                    </td>
+                                                                    <td className="py-6 px-4 text-right font-mono font-bold text-gray-400">{(r.rate * 100).toFixed(3)}%</td>
+                                                                    <td className="py-6 px-4 text-right font-bold text-gray-400">¥{fComm(r.min)}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {view === 'admin' && (
+                            <div className="max-w-5xl mx-auto space-y-10 animate-in fade-in duration-700">
+                                <button onClick={() => setView('home')} className="text-blue-600 font-bold text-sm">← 返回首页</button>
+                                <div className="grid md:grid-cols-3 gap-8 text-left">
+                                    <div className="md:col-span-2 apple-card p-12 space-y-10 border-2 border-blue-500/20">
+                                        <div className="flex justify-between items-center">
+                                            <h3 className="text-3xl font-black text-gray-900 tracking-tight">参数维护中心</h3>
+                                            <span className="px-3 py-1 bg-black text-white text-[10px] font-black rounded-full uppercase tracking-widest">Secure Access</span>
+                                        </div>
+                                        <div className="grid md:grid-cols-2 gap-8">
+                                            <div className="space-y-4">
+                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">标准结算汇率 (USD/CNY)</label>
+                                                <input type="number" step="0.0001" className="w-full p-6 rounded-[24px] bg-gray-50 border-none font-black text-2xl text-blue-600 outline-none" value={exRate} onChange={e => setExRate(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-4">
+                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">更新 मास्टर报价逻辑 (.xlsx)</label>
+                                                <div className="h-[88px] border-2 border-dashed border-gray-100 rounded-[24px] flex items-center justify-center bg-gray-50 relative hover:border-blue-400 transition-all cursor-pointer">
+                                                    <input type="file" onChange={handleAdminUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
+                                                    <span className="text-sm font-black text-gray-400">点击同步最新分类与费率</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {lastUploadStats && (
+                                            <div className="p-8 bg-blue-50/50 rounded-[32px] border border-blue-100 animate-in slide-in-from-top-4 overflow-hidden">
+                                                <h4 className="text-sm font-black text-blue-600 mb-4 uppercase tracking-widest">最近同步摘要：{lastUploadStats.fileName}</h4>
+                                                <div className="grid grid-cols-3 gap-6">
+                                                    <div><p className="text-[10px] text-gray-400 font-bold uppercase">条目数</p><p className="text-2xl font-black">{fComm(lastUploadStats.count)}条</p></div>
+                                                    <div><p className="text-[10px] text-gray-400 font-bold uppercase">平均变动</p><p className="text-2xl font-black">{lastUploadStats.diff.rateDiff}%</p></div>
+                                                    <div><p className="text-[10px] text-gray-400 font-bold uppercase">同步时间</p><p className="text-sm font-bold opacity-40 leading-none mt-2">{lastUploadStats.time}</p></div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="apple-card p-10 bg-gray-900 text-white flex flex-col justify-between">
+                                        <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-8">System Telemetry</p>
+                                        <div className="space-y-8">
+                                            <div><p className="text-xs opacity-40">有效规则库</p><p className="text-4xl font-black tabular-nums">{db.length}</p></div>
+                                            <div><p className="text-xs opacity-40">审计日志</p><p className="text-4xl font-black tabular-nums">{logs.length}</p></div>
+                                        </div>
+                                        <p className="mt-8 text-[10px] italic text-blue-400 font-bold">后台连接已加密。所有变动均为原子化写入。</p>
+                                    </div>
+                                </div>
+
+                                <div className="log-window no-scrollbar">
+                                    <p className="text-[10px] text-gray-500 mb-8 font-black uppercase tracking-[0.4em] text-center border-b border-white/5 pb-6">Audit Trail Ecosystem - 全量审计溯源</p>
+                                    <div className="space-y-4 max-h-[500px] overflow-y-auto px-4 no-scrollbar">
+                                        {logs.map(log => (
+                                            <div key={log.id} className="flex justify-between items-center py-4 border-b border-white/5">
+                                                <div className="space-y-1">
+                                                    <span className="text-blue-500 font-black text-[9px] uppercase tracking-widest bg-blue-500/10 px-2 py-0.5 rounded-full">{log.type}</span>
+                                                    <p className="text-white/70 text-sm font-medium">{log.detail}</p>
+                                                    <p className="text-white/20 text-[9px] tabular-nums">{log.time}</p>
+                                                </div>
+                                                {log.snapshot && <button onClick={() => setModalFile(log)} className="text-[9px] font-black uppercase tracking-widest text-white/40 hover:text-white transition-colors">View Snapshot</button>}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    {modalFile && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-12 modal-overlay" onClick={() => setModalFile(null)}>
+                            <div className="bg-white w-full max-w-5xl max-h-full rounded-[56px] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in duration-300" onClick={e => e.stopPropagation()}>
+                                <div className="p-12 border-b flex justify-between items-center bg-gray-50">
+                                    <div><h4 className="font-black text-3xl">历史报价逻辑快照</h4></div>
+                                    <button onClick={() => setModalFile(null)} className="text-4xl rotate-45 hover:scale-125 transition-transform">＋</button>
+                                </div>
+                                <div className="flex-1 overflow-auto p-12 no-scrollbar">
+                                    <table className="w-full text-xs text-left">
+                                        <thead className="bg-black text-white"><tr><th className="p-4 border-r border-white/10 uppercase">Code</th><th className="p-4 border-r border-white/10 uppercase">Category</th><th className="p-4 border-r border-white/10 text-center uppercase">Rate</th><th className="p-4 text-right uppercase">Min</th></tr></thead>
+                                        <tbody className="divide-y">{modalFile.snapshot.map((row, i) => (<tr key={i} className="hover:bg-gray-50"><td className="p-4 font-black">{row.id}</td><td className="p-4 font-bold">{row.cat}</td><td className="p-4 font-mono text-center text-blue-600 font-black">{row.rate}</td><td className="p-4 text-right font-black">¥{fComm(row.min)}</td></tr>))}</tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+
+</html>
