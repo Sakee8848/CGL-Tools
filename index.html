@@ -59,9 +59,26 @@
             return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
         };
 
+        // 初始化数据库：包含更丰富的五金、工具与风险品类库
         const DEFAULT_DB = [
-            { id: '11210', cat: '手动工具', cls: 'B', rate: 0.00065, min: 4500, keywords: 'tap,die,wrench,drill,bit' },
-            { id: '10905', cat: '非防护型工作服', cls: 'B', rate: 0.00065, min: 4500, keywords: 'glove,thermal,work clothes' }
+            // === 高风险/拒保类 (High Risk / Excluded) ===
+            { id: '11213', cat: '焊接设备/Welding & Soldering', cls: 'Excluded', rate: 0.05, min: 10000, keywords: 'welder,welding,soldering,plastic welder,arc weld' },
+            { id: '10203', cat: '电池/Battery Packs', cls: 'C', rate: 0.012, min: 6500, keywords: 'battery,lithium,power bank,18650' },
+            { id: '12240', cat: '头盔/Helmets', cls: 'C', rate: 0.015, min: 8000, keywords: 'helmet,safety hat,protective headwear' },
+            { id: '90001', cat: '儿童玩具/Toys', cls: 'C', rate: 0.010, min: 6000, keywords: 'toy,plush,kids,children,doll' },
+
+            // === A类 (较高风险/电动工具/加热器) ===
+            { id: '11113', cat: '加热设备/Heating Equipment', cls: 'A', rate: 0.0035, min: 5500, keywords: 'heater,garage heater,space heater,fireplace,stove' },
+            { id: '11209', cat: '电动工具/Power Tools', cls: 'A', rate: 0.0030, min: 5000, keywords: 'spray gun,paint sprayer,drill,saw,grinder,sander,power tool' },
+            { id: '10406', cat: '家用电器(加热)/Appliances-Heat', cls: 'A', rate: 0.0025, min: 4800, keywords: 'oven,toaster,fryer,kettle,coffee maker' },
+
+            // === B类 (标准风险/手动工具/劳保/日用) ===
+            { id: '11210', cat: '手动工具/Hand Tools', cls: 'B', rate: 0.0012, min: 4500, keywords: 'wrench,plier,screwdriver,hammer,tap and die,nut driver,pipe threading,socket set,hex key,allen key,security bit' },
+            { id: '10905', cat: '工作服与劳保/Work Clothes', cls: 'B', rate: 0.0015, min: 4200, keywords: 'glove,work glove,safety vest,apron,uniform' },
+            { id: '10137', cat: '汽车配件/Auto Parts', cls: 'B', rate: 0.0018, min: 4800, keywords: 'car part,bumper,wiper,filter,mat,automotive' },
+            { id: '11114', cat: '家居用品/Home Goods', cls: 'B', rate: 0.0008, min: 4000, keywords: 'organizer,storage,shelf,rack,hook,hanger,basket,bin' },
+            { id: '12050', cat: '纺织品/Textiles', cls: 'B', rate: 0.0009, min: 4000, keywords: 'fabric,cloth,towel,bedding,pillow,curtain' },
+            { id: '10000', cat: '普通百货/General MDSE', cls: 'B', rate: 0.00065, min: 4200, keywords: 'merchandise,general,gift' }
         ];
 
         const DEFAULT_COI_RULES = [
@@ -73,7 +90,7 @@
 
         function App() {
             const [view, setView] = useState('home');
-            const [db, setDb] = useState(() => JSON.parse(localStorage.getItem('cgl_db')) || DEFAULT_DB);
+            const [db, setDb] = useState(() => JSON.parse(localStorage.getItem('cgl_db_v2')) || DEFAULT_DB);
             const [logs, setLogs] = useState(() => JSON.parse(localStorage.getItem('cgl_audit_logs')) || []);
             const [exRate, setExRate] = useState(() => parseFloat(localStorage.getItem('cgl_ex_rate')) || 7.2);
 
@@ -98,35 +115,89 @@
             const getRevenueNum = () => parseFloat(revenueRaw.replace(/,/g, '')) || 0;
 
             useEffect(() => {
-                localStorage.setItem('cgl_db', JSON.stringify(db));
+                localStorage.setItem('cgl_db_v2', JSON.stringify(db));
                 localStorage.setItem('cgl_audit_logs', JSON.stringify(logs));
                 localStorage.setItem('cgl_ex_rate', exRate);
                 localStorage.setItem('cgl_coi_rules', JSON.stringify(coiRules));
             }, [db, logs, exRate, coiRules]);
 
+            // 自动修复/迁移逻辑：如果发现当前 DB 缺失核心规则，强制更新
+            useEffect(() => {
+                if (db.length > 0) {
+                    const hasNewRules = db.some(r => r.keywords && r.keywords.includes('welder'));
+                    if (!hasNewRules) {
+                        console.warn("Detected outdated DB. Forcing update to new DEFAULT_DB...");
+                        setDb(DEFAULT_DB);
+                        localStorage.setItem('cgl_db_v2', JSON.stringify(DEFAULT_DB));
+                        alert("系统已自动升级风险规则库，包含五金、劳保等新分类！");
+                    }
+                }
+            }, [db]);
+
+            // 自动修复/迁移逻辑：如果发现当前 DB 缺失核心规则，强制更新
+            useEffect(() => {
+                const hasNewRules = db.some(r => r.keywords && r.keywords.includes('welder'));
+                if (!hasNewRules) {
+                    console.warn("Detected outdated DB. Forcing update to new DEFAULT_DB...");
+                    setDb(DEFAULT_DB);
+                    localStorage.setItem('cgl_db_v2', JSON.stringify(DEFAULT_DB));
+                    alert("系统已自动升级风险规则库，包含五金、劳保等新分类！");
+                }
+            }, [db]);
+
+            // 核心处理函数：处理上传的销售报告
             const processMerchantReport = (data) => {
                 const globalRev = getRevenueNum();
+                console.group("SKU Matching Debug Log");
 
                 // 1. 识别 SKU 风险并尝试提取销售数据
-                const rawMatches = data.map(row => {
+                const rawMatches = data.map((row, idx) => {
                     const keys = Object.keys(row);
-                    const titleKey = keys.find(k => k.toLowerCase().includes('description') || k.toLowerCase().includes('name') || k.toLowerCase().includes('sku')) || keys[0];
-                    const salesKey = keys.find(k => k.toLowerCase().includes('sales') || k.toLowerCase().includes('revenue') || k.toLowerCase().includes('amount') || k.toLowerCase().includes('total'));
+                    const kLow = keys.map(k => k.toLowerCase());
+
+                    // 优化：优先匹配明确的描述/名称列，支持中文
+                    let titleKey = keys.find(k => {
+                        const low = k.toLowerCase();
+                        return (low.includes('description') || low.includes('name') || low.includes('title') || low.includes('product') ||
+                            low.includes('描述') || low.includes('名称') || low.includes('品名') || low.includes('商品'));
+                    });
+
+                    // 如果没找到描述列，才尝试用 SKU 或第一列兜底
+                    if (!titleKey) {
+                        titleKey = keys.find(k => k.toLowerCase().includes('sku')) || keys[0];
+                    }
+
+                    // 优化：支持中文销售额列名
+                    const salesKey = keys.find(k => {
+                        const low = k.toLowerCase();
+                        return (low.includes('sales') || low.includes('revenue') || low.includes('amount') || low.includes('total') ||
+                            low.includes('price') || low.includes('销售') || low.includes('金额') || low.includes('价格'));
+                    });
 
                     const title = row[titleKey] || "未知商品";
                     const salesValue = parseFloat(String(row[salesKey] || "0").replace(/[^0-9.]/g, '')) || 0;
 
+                    // Debug: 打印前5个详情
+                    if (idx < 5) console.log(`Processing Item [${idx}]:`, title);
+
                     const match = db.find(d => {
                         const keywords = String(d.keywords || '');
-                        return keywords.split(',').some(k =>
-                            k && String(title).toLowerCase().includes(k.trim().toLowerCase())
-                        );
+                        const hit = keywords.split(/[,，]/).find(k => {
+                            const cleanK = k.trim().toLowerCase();
+                            return cleanK && String(title).toLowerCase().includes(cleanK);
+                        });
+
+                        // 修正：增加日志输出，确认匹配成功
+                        if (hit && idx < 5) console.log(`   ✅ Matched Rule [${d.cat}] using keyword: "${hit}"`);
+
+                        return !!hit;
                     }) || { id: '10000', cat: '普通百货/General MDSE', cls: 'B', rate: 0.00065, min: 4500, keywords: 'general,merchandise' };
 
                     return { title, salesValue, ...match };
                 });
+                console.groupEnd();
 
-                // 2. 按品类(ID)进行汇总
+                // 2. 按品类(ID)进行归集汇总
                 const groupsMap = {};
                 rawMatches.forEach(item => {
                     if (!groupsMap[item.id]) {
@@ -137,35 +208,53 @@
                             rate: item.rate,
                             min: item.min,
                             itemsCount: 0,
-                            excelTotalSales: 0
+                            excelTotalSales: 0,
+                            items: [] // 存储该分类下的所有 SKU
                         };
                     }
                     groupsMap[item.id].itemsCount += 1;
                     groupsMap[item.id].excelTotalSales += item.salesValue;
+                    groupsMap[item.id].items.push(item);
                 });
 
-                // 3. 计算权重并分配用户输入的总销售额
+                // 3. 计算权重并初始化申报销售额
                 const totalExcelSales = rawMatches.reduce((sum, item) => sum + item.salesValue, 0);
                 const groupsArray = Object.values(groupsMap).map(group => {
                     // 如果 Excel 没金额，则按产品数量平均分配；如果有金额，按比例分配
                     const weight = totalExcelSales > 0 ? group.excelTotalSales / totalExcelSales : 1 / Object.keys(groupsMap).length;
-                    const allocatedSales = globalRev * weight;
+
+                    // 默认逻辑：将用户输入的总销售额按权重分配给各组
+                    // 如果用户还没有输入总销售额，则使用 Excel 抓取总额作为默认值
+                    const allocatedSales = globalRev > 0 ? globalRev * weight : group.excelTotalSales;
+
+                    // 初始化 declaredSales (可编辑字段)
+                    const declaredSales = allocatedSales;
 
                     const effectiveRate = deductibleType === '0' ? group.rate * 1.2 : group.rate;
                     const effectiveMin = deductibleType === '0' ? group.min * 1.2 : group.min;
 
-                    const elasticPrem = allocatedSales * effectiveRate * exRate;
+                    // 高风险/拒保类特殊处理
+                    const isHighRisk = group.cls === 'C' || group.cls === 'Excluded';
+
+                    // 如果是 Excluded，费率可能极高或建议人工核保
+                    // 这里为了演示，Excluded 按 rate 计算但不参与最低保费对冲（相对独立）
+                    let elasticPrem = declaredSales * effectiveRate * exRate;
+
+                    // Excluded 类目的最低保费通常是强制的，且不享受折扣
                     const finalGroupPrem = Math.max(elasticPrem, effectiveMin);
 
                     return {
                         ...group,
                         weight,
                         allocatedSales,
+                        declaredSales,
                         effectiveRate,
                         effectiveMin,
                         elasticPrem,
                         finalGroupPrem,
-                        isMinApplied: effectiveMin > elasticPrem
+                        isMinApplied: effectiveMin > elasticPrem,
+                        isHighRisk, // 标记为高风险
+                        sales: group.excelTotalSales
                     };
                 });
 
@@ -173,6 +262,29 @@
                 setGroupedResults(groupsArray);
                 setTotalFinalPrem(groupsArray.reduce((sum, g) => sum + g.finalGroupPrem, 0));
             };
+            // 新增: 处理组销售额修改
+            const handleGroupSalesChange = (groupId, newVal) => {
+                const val = parseFloat(newVal) || 0;
+                setGroupedResults(prev => {
+                    const newGroups = prev.map(g => {
+                        if (g.id === groupId) {
+                            const newG = { ...g, declaredSales: val };
+                            // 重新计算该组保费
+                            const effectiveRate = deductibleType === '0' ? newG.rate * 1.2 : newG.rate;
+                            const effectiveMin = deductibleType === '0' ? newG.min * 1.2 : newG.min;
+                            let prem = val * effectiveRate * exRate;
+                            newG.finalGroupPrem = Math.max(prem, effectiveMin);
+                            newG.isMinApplied = effectiveMin > prem;
+                            return newG;
+                        }
+                        return g;
+                    });
+                    // 更新总保费
+                    setTotalFinalPrem(newGroups.reduce((sum, g) => sum + g.finalGroupPrem, 0));
+                    return newGroups;
+                });
+            };
+
 
             const handleMerchantUpload = async (e) => {
                 const file = e.target.files[0];
@@ -229,49 +341,59 @@
                 }
             };
 
-            // 新增：从文本中解析数据的辅助函数
+            // 新增：从文本中解析数据的辅助函数 (升级为正则智能匹配模式)
             const parseTextToData = (text) => {
                 const lines = text.split('\n').filter(line => line.trim());
                 const parsedData = [];
+                let matchCount = 0;
 
                 lines.forEach(line => {
-                    // 尝试匹配 SKU/产品名称 和 销售额
-                    // 格式示例: "B08N5WRWNW  $1500" 或 "手动工具  2000"
-                    const parts = line.trim().split(/\s+/);
+                    // 1. 优先尝试匹配 SKU 格式 (8位以上字母数字组合)
+                    const skuMatch = line.match(/\b([A-Z0-9]{8,})\b/i);
+                    // 2. 尝试匹配金额
+                    const salesMatch = line.match(/[\$¥￥]?\s?([0-9,]+\.?\d*)/);
 
-                    if (parts.length >= 2) {
-                        // 最后一个元素作为销售额，其余作为产品描述
-                        const description = parts.slice(0, -1).join(' ');
-                        const salesText = parts[parts.length - 1].replace(/[\$¥,]/g, '');
-                        const sales = parseFloat(salesText);
+                    let description = '';
+                    let sales = 0;
 
-                        if (description && !isNaN(sales) && sales > 0) {
-                            parsedData.push({
-                                'Product Description': description,  // 使用标准列名
-                                'Sales': sales
-                            });
+                    if (skuMatch) {
+                        description = skuMatch[1]; // 提取到的 SKU
+
+                        // 如果有 SKU，尝试找金额
+                        if (salesMatch) {
+                            sales = parseFloat(salesMatch[1].replace(/,/g, ''));
                         }
-                    } else if (parts.length === 1) {
-                        // 如果只有一个字段，尝试判断是 SKU 还是金额
-                        const value = parts[0].replace(/[\$¥,]/g, '');
-                        const numValue = parseFloat(value);
 
-                        if (!isNaN(numValue) && numValue > 0) {
-                            parsedData.push({
-                                'Product Description': 'Unknown Product',
-                                'Sales': numValue
-                            });
-                        } else {
-                            parsedData.push({
-                                'Product Description': parts[0],
-                                'Sales': 0
-                            });
+                        // 只要有 SKU，即使金额为 0 也录入
+                        parsedData.push({
+                            'Product Description': description,
+                            'Sales': isNaN(sales) ? 0 : sales
+                        });
+                        matchCount++;
+
+                    } else {
+                        // 如果没有 SKU，尝试回退到旧的分隔符逻辑 (兼容普通商品名)
+                        const parts = line.trim().split(/\s+/);
+                        if (parts.length >= 2) {
+                            const lastPart = parts[parts.length - 1].replace(/[\$¥￥,]/g, '');
+                            const potentialSales = parseFloat(lastPart);
+
+                            if (!isNaN(potentialSales) && potentialSales > 0) {
+                                description = parts.slice(0, -1).join(' '); // 假设前面是名称
+                                parsedData.push({
+                                    'Product Description': description,
+                                    'Sales': potentialSales
+                                });
+                                matchCount++;
+                            }
                         }
                     }
                 });
 
                 if (parsedData.length === 0) {
-                    alert("⚠️ 未能从文件中识别出有效数据\n\n建议格式：\nSKU或产品名  销售额\n例如：\nB08N5WRWNW  1500\n手动工具  2000");
+                    alert("⚠️ 未能从文件中识别出有效数据\n\n请确保文件中包含 SKU (如 B08N5WRWNW) 或 商品名+金额");
+                } else {
+                    console.log(`✅ 智能文本解析成功: 提取到 ${parsedData.length} 条数据`);
                 }
 
                 return parsedData;
@@ -281,28 +403,75 @@
             const handleAdminUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
+
                 const reader = new FileReader();
                 reader.onload = (evt) => {
                     try {
                         const wb = XLSX.read(evt.target.result, { type: 'binary' });
-                        const raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
-                        const headerRow = raw.find(r => r.some(c => String(c).includes('Code') || String(c).includes('费率')));
-                        const col = {
-                            code: headerRow.indexOf('Main Sub Category Code') !== -1 ? headerRow.indexOf('Main Sub Category Code') : 2,
-                            name: headerRow.indexOf('Main Sub Category') !== -1 ? headerRow.indexOf('Main Sub Category') : 3,
-                            rate: headerRow.indexOf('费率') !== -1 ? headerRow.indexOf('费率') : 6,
-                            min: headerRow.indexOf('最低保费') !== -1 ? headerRow.indexOf('最低保费') : 5
+                        // 1. 读取为 JSON 对象数组，不再依赖固定行号
+                        const rawData = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+
+                        if (!rawData || rawData.length === 0) {
+                            alert("未在 Excel 中找到有效数据");
+                            return;
+                        }
+
+                        // 2. 智能识别列名（取第一行数据的 key 做探测）
+                        const sampleRow = rawData[0];
+                        const keys = Object.keys(sampleRow);
+                        const kLow = keys.map(k => k.toLowerCase());
+
+                        // 辅助函数：查找匹配的 Key（模糊匹配）
+                        const findKey = (patterns) => keys.find(k => patterns.some(p => k.toLowerCase().includes(p)));
+
+                        const keyMap = {
+                            id: findKey(['code', 'sku', 'id', '代码', '编码', '序号']),
+                            cat: findKey(['cat', 'name', 'desc', 'type', '分类', '名称', '品类', 'description']),
+                            cls: findKey(['class', 'level', 'risk', '级别', '风险', '等级']),
+                            rate: findKey(['rate', 'prem', '费率', '价格', '点位']),
+                            min: findKey(['min', 'floor', '最低', '起步']),
+                            // 关键：尝试找专门的关键词列，如果没有，后续会用 cat 填充
+                            keywords: findKey(['keyword', 'tag', 'match', '关键词', '匹配', 'description'])
                         };
-                        const newDb = raw.slice(raw.indexOf(headerRow) + 1).filter(r => r[col.code]).map(r => ({
-                            id: String(r[col.code]), cat: r[col.name] || '未命名', cls: 'B', rate: parseFloat(r[col.rate]) || 0.00065, min: parseFloat(r[col.min]) || 4500, keywords: r[col.name] || ''
-                        }));
+
+                        console.log("识别到的列映射:", keyMap);
+
+                        // 3. 构建标准数据库结构
+                        const newDb = rawData.map(r => {
+                            const catName = r[keyMap.cat] || '未命名分类';
+                            let keywords = r[keyMap.keywords];
+
+                            // 如果没有专门的 keywords 列，或者 keywords 为空，就使用分类名称作为关键词
+                            // 并进行简单的分词处理，增加匹配概率
+                            if (!keywords) {
+                                // 移除括号内容，如 "Hand Tools (手动工具)" -> "Hand Tools 手动工具"
+                                keywords = String(catName).replace(/[()（）]/g, ' ').replace(/\//g, ' ');
+                            } else {
+                                keywords = String(keywords);
+                            }
+
+                            return {
+                                id: String(r[keyMap.id] || Math.floor(Math.random() * 100000)),
+                                cat: catName,
+                                cls: r[keyMap.cls] || 'B', // 默认为 B 类
+                                rate: parseFloat(String(r[keyMap.rate] || '0').replace(/%/, '')) / (String(r[keyMap.rate]).includes('%') ? 100 : 1) || 0.00065,
+                                min: parseFloat(String(r[keyMap.min] || '0').replace(/[^0-9.]/g, '')) || 4500,
+                                keywords: keywords
+                            };
+                        }).filter(item => item.id && item.cat); // 过滤无效行
+
                         if (newDb.length > 0) {
                             setDb(newDb);
                             setLastUploadStats({ count: newDb.length, fileName: file.name, time: new Date().toLocaleString() });
-                            addLog('费率库更新', `管理员上传了报价表: ${file.name} (共 ${newDb.length} 条)`, newDb.slice(0, 5));
-                            alert(`✅ 规则已更新 (${newDb.length} 条)`);
+                            addLog('费率库更新', `管理员上传了报价表: ${file.name} (共 ${newDb.length} 条)`, newDb.slice(0, 3));
+                            alert(`✅ 规则已更新 (${newDb.length} 条)\n系统已基于列名自动识别规则，并提取类目名称作为匹配关键词。`);
+                        } else {
+                            alert("未能解析出有效规则，请检查表头名。");
                         }
-                    } catch (err) { alert("同步失败"); }
+                    } catch (err) {
+                        console.error(err);
+                        alert("Excel 解析失败，请检查文件格式。");
+                    }
                 };
                 reader.readAsBinaryString(file);
             };
@@ -534,7 +703,7 @@
                                                                         </div>
                                                                     </td>
                                                                     <td className="py-6 px-6 text-right font-bold text-gray-500 tabular-nums">
-                                                                        ${fComm(g.allocatedSales)}
+                                                                        ${fComm(g.declaredSales || g.allocatedSales)}
                                                                     </td>
                                                                     <td className="py-6 px-6 text-center font-mono font-black text-blue-600">
                                                                         {(g.effectiveRate * 100).toFixed(4)}%
@@ -557,6 +726,86 @@
                                                 </div>
                                             </div>
 
+                                            {/* 新增: 风险分类汇总与申报卡片区 */}
+                                            <div className="space-y-6 pt-12 border-t border-gray-100">
+                                                <div className="flex items-center justify-between pb-4">
+                                                    <div>
+                                                        <h4 className="text-xl font-black text-gray-900 tracking-tight">风险分类详情与申报 (Submission Details)</h4>
+                                                        <p className="text-xs text-gray-400 font-medium mt-1">请核对各大类申报销售额，系统将基于申报额重新计算保费</p>
+                                                    </div>
+                                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest bg-gray-50 px-3 py-1 rounded-full">Automated Analysis</span>
+                                                </div>
+
+                                                <div className="space-y-4">
+                                                    {groupedResults.map((group) => {
+                                                        const isHighRisk = group.cls === 'C' || group.cls === 'Excluded';
+
+                                                        return (
+                                                            <div key={group.id} className={`bg-white rounded-[24px] border ${isHighRisk ? 'border-red-200 bg-red-50/10' : 'border-gray-100'} overflow-hidden shadow-sm hover:shadow-md transition-all duration-300`}>
+                                                                {/* 卡片头部 */}
+                                                                <div className="p-6 flex flex-col md:flex-row gap-6 md:items-center justify-between">
+                                                                    {/* 左侧：分类信息 */}
+                                                                    <div className="flex items-center gap-4 min-w-[300px]">
+                                                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl font-black ${isHighRisk ? 'bg-red-100 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
+                                                                            {group.cls}
+                                                                        </div>
+                                                                        <div>
+                                                                            <div className="flex items-center gap-2">
+                                                                                <h5 className="font-bold text-gray-900">{group.cat}</h5>
+                                                                                {isHighRisk && <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-bold">HIGH RISK</span>}
+                                                                            </div>
+                                                                            <p className="text-xs text-gray-400 font-medium mt-1">包含 {group.items?.length || 0} 个 SKU · 风险费率 {group.rate}%</p>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* 中间：销售额申报 */}
+                                                                    <div className="flex-1 min-w-[200px]">
+                                                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">该类目申报销售额 (USD)</label>
+                                                                        <div className="relative group/input">
+                                                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
+                                                                            <input
+                                                                                type="text"
+                                                                                className="w-full pl-8 pr-4 py-3 bg-gray-50 border-transparent rounded-xl text-gray-900 font-bold focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all text-right"
+                                                                                value={fComm(group.declaredSales)}
+                                                                                onChange={(e) => handleGroupSalesChange(group.id, e.target.value.replace(/[^0-9.]/g, ''))}
+                                                                            />
+                                                                            <div className="absolute right-0 -bottom-5 text-[10px] text-gray-400 opacity-0 group-hover/input:opacity-100 transition-opacity">
+                                                                                Excel抓取总额: ${fComm(group.sales)}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* 右侧：计算结果 */}
+                                                                    <div className="text-right min-w-[150px]">
+                                                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">预估保费 (CNY)</label>
+                                                                        <div className="text-2xl font-black text-gray-900 flex items-center justify-end gap-1">
+                                                                            <span className="text-sm text-gray-300">¥</span>
+                                                                            {fComm(group.finalGroupPrem)}
+                                                                        </div>
+                                                                        {group.isMinApplied && <span className="text-[10px] text-orange-500 font-bold bg-orange-50 px-2 rounded-full">已应用最低保费</span>}
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* 折叠区域：SKU 明细 */}
+                                                                <details className="border-t border-gray-50 group/details">
+                                                                    <summary className="p-4 flex items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors text-xs font-bold text-gray-400 uppercase tracking-widest select-none list-none">
+                                                                        <span className="group-open/details:hidden">查看 SKU 明细 ({group.items?.length}) ▼</span>
+                                                                        <span className="hidden group-open/details:block">收起明细 ▲</span>
+                                                                    </summary>
+                                                                    <div className="p-6 bg-gray-50/50 space-y-2">
+                                                                        {group.items?.map((item, idx) => (
+                                                                            <div key={idx} className="flex justify-between items-center text-sm py-2 border-b border-gray-100 last:border-0 border-dashed">
+                                                                                <span className="text-gray-600 font-medium truncate max-w-[70%]">{item.title}</span>
+                                                                                <span className="text-gray-400 font-mono">${fComm(item.salesValue)}</span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </details>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
                                             <div className="pt-12 border-t space-y-4">
                                                 <h5 className="text-sm font-black text-gray-400 uppercase tracking-widest px-4">原始 SKU 匹配明细明细</h5>
                                                 <div className="max-h-[400px] overflow-y-auto no-scrollbar border rounded-[32px] bg-white">

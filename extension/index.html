@@ -116,9 +116,12 @@
                     const title = row[titleKey] || "未知商品";
                     const salesValue = parseFloat(String(row[salesKey] || "0").replace(/[^0-9.]/g, '')) || 0;
 
-                    const match = db.find(d => d.keywords.split(',').some(k =>
-                        String(title).toLowerCase().includes(k.trim().toLowerCase())
-                    )) || { id: '10000', cat: '普通百货/General MDSE', cls: 'B', rate: 0.00065, min: 4500 };
+                    const match = db.find(d => {
+                        const keywords = String(d.keywords || '');
+                        return keywords.split(',').some(k =>
+                            k && String(title).toLowerCase().includes(k.trim().toLowerCase())
+                        );
+                    }) || { id: '10000', cat: '普通百货/General MDSE', cls: 'B', rate: 0.00065, min: 4500, keywords: 'general,merchandise' };
 
                     return { title, salesValue, ...match };
                 });
@@ -171,19 +174,109 @@
                 setTotalFinalPrem(groupsArray.reduce((sum, g) => sum + g.finalGroupPrem, 0));
             };
 
-            const handleMerchantUpload = (e) => {
+            const handleMerchantUpload = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (evt) => {
-                    try {
-                        const wb = XLSX.read(evt.target.result, { type: 'binary' });
-                        const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-                        processMerchantReport(data);
-                    } catch (err) { alert("解析失败"); }
-                };
-                reader.readAsBinaryString(file);
+
+                const fileName = file.name;
+                const fileExt = fileName.split('.').pop().toLowerCase();
+
+                try {
+                    if (fileExt === 'xlsx' || fileExt === 'xls' || fileExt === 'csv') {
+                        // Excel/CSV 处理
+                        const reader = new FileReader();
+                        reader.onload = (evt) => {
+                            try {
+                                const wb = XLSX.read(evt.target.result, { type: 'binary' });
+                                const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+                                processMerchantReport(data);
+                            } catch (err) { alert("Excel 解析失败"); }
+                        };
+                        reader.readAsBinaryString(file);
+
+                    } else if (fileExt === 'txt') {
+                        // TXT 文本处理
+                        const text = await file.text();
+                        const parsedData = parseTextToData(text);
+                        processMerchantReport(parsedData);
+
+                    } else if (fileExt === 'pdf') {
+                        // PDF 处理
+                        const loadingTask = pdfjsLib.getDocument(URL.createObjectURL(file));
+                        const pdf = await loadingTask.promise;
+                        let fullText = '';
+                        for (let i = 1; i <= pdf.numPages; i++) {
+                            const page = await pdf.getPage(i);
+                            const content = await page.getTextContent();
+                            fullText += content.items.map(item => item.str).join(' ') + '\n';
+                        }
+                        const parsedData = parseTextToData(fullText);
+                        processMerchantReport(parsedData);
+
+                    } else if (fileExt === 'docx' || fileExt === 'doc') {
+                        // Word 文档处理
+                        const arrayBuffer = await file.arrayBuffer();
+                        const result = await mammoth.extractRawText({ arrayBuffer });
+                        const parsedData = parseTextToData(result.value);
+                        processMerchantReport(parsedData);
+
+                    } else {
+                        alert("不支持的文件格式\n\n请上传：Excel (.xlsx/.xls)、CSV、TXT、PDF 或 Word (.docx)");
+                    }
+                } catch (err) {
+                    console.error('文件解析错误:', err);
+                    alert("文件解析失败: " + err.message);
+                }
             };
+
+            // 新增：从文本中解析数据的辅助函数
+            const parseTextToData = (text) => {
+                const lines = text.split('\n').filter(line => line.trim());
+                const parsedData = [];
+
+                lines.forEach(line => {
+                    // 尝试匹配 SKU/产品名称 和 销售额
+                    // 格式示例: "B08N5WRWNW  $1500" 或 "手动工具  2000"
+                    const parts = line.trim().split(/\s+/);
+
+                    if (parts.length >= 2) {
+                        // 最后一个元素作为销售额，其余作为产品描述
+                        const description = parts.slice(0, -1).join(' ');
+                        const salesText = parts[parts.length - 1].replace(/[\$¥,]/g, '');
+                        const sales = parseFloat(salesText);
+
+                        if (description && !isNaN(sales) && sales > 0) {
+                            parsedData.push({
+                                'Product Description': description,  // 使用标准列名
+                                'Sales': sales
+                            });
+                        }
+                    } else if (parts.length === 1) {
+                        // 如果只有一个字段，尝试判断是 SKU 还是金额
+                        const value = parts[0].replace(/[\$¥,]/g, '');
+                        const numValue = parseFloat(value);
+
+                        if (!isNaN(numValue) && numValue > 0) {
+                            parsedData.push({
+                                'Product Description': 'Unknown Product',
+                                'Sales': numValue
+                            });
+                        } else {
+                            parsedData.push({
+                                'Product Description': parts[0],
+                                'Sales': 0
+                            });
+                        }
+                    }
+                });
+
+                if (parsedData.length === 0) {
+                    alert("⚠️ 未能从文件中识别出有效数据\n\n建议格式：\nSKU或产品名  销售额\n例如：\nB08N5WRWNW  1500\n手动工具  2000");
+                }
+
+                return parsedData;
+            };
+
 
             const handleAdminUpload = (e) => {
                 const file = e.target.files[0];
@@ -375,11 +468,11 @@
                                     </div>
 
                                     <div className="border-2 border-dashed border-gray-100 rounded-[40px] p-20 text-center hover:bg-blue-50/20 hover:border-blue-400 transition-all relative group bg-gray-50/30">
-                                        <input type="file" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={handleMerchantUpload} />
+                                        <input type="file" accept=".xlsx,.xls,.csv,.txt,.pdf,.docx,.doc" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={handleMerchantUpload} />
                                         <div className="space-y-4">
                                             <div className="text-5xl group-hover:scale-110 transition-transform">📄</div>
                                             <h4 className="text-xl font-black">上传 SKU 详情报告</h4>
-                                            <p className="text-gray-400 font-medium italic">系统将根据风险类目自动对冲销售额，智能计算分项最低保费</p>
+                                            <p className="text-gray-400 font-medium italic">支持 Excel、CSV、TXT、PDF、Word 等格式</p>
                                         </div>
                                     </div>
 
