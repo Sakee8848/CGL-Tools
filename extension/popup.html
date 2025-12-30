@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CGL 智能助手</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 400px;
+            height: 550px;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            overflow-y: auto;
+        }
+
+        .container {
+            padding: 24px;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 900;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .subtitle {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-bottom: 24px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .card h3 {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .upload-btn {
+            background: white;
+            color: #667eea;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.3s;
+        }
+
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+        }
+
+        .upload-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .result {
+            background: rgba(255, 255, 255, 0.25);
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 12px;
+            font-size: 12px;
+        }
+
+        .result strong {
+            display: block;
+            font-size: 20px;
+            margin-top: 4px;
+        }
+
+        .footer {
+            text-align: center;
+            font-size: 10px;
+            opacity: 0.6;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🛡️ CGL 智能助手</h1>
+        <p class="subtitle">亚马逊合规报价 · 一键计算</p>
+
+        <div class="card">
+            <h3>📊 上传销售报告</h3>
+            <input type="file" id="fileInput" accept=".xlsx,.xls,.csv,.txt,.pdf,.docx,.doc">
+            <button class="upload-btn" id="uploadBtn">
+                选择文件 (支持所有格式)
+            </button>
+            <div id="result" style="display:none;" class="result">
+                <span>预估总保费 (CNY)</span>
+                <strong id="premium">¥0.00</strong>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>🔍 抓取当前页面</h3>
+            <button class="upload-btn" id="extractBtn">
+                从亚马逊页面提取数据
+            </button>
+            <div id="extractResult" style="display:none;" class="result">
+                <span>已抓取 <strong id="extractCount" style="display:inline;font-size:16px;">0</strong> 条SKU</span>
+                <span style="display:block;margin-top:8px;">总销售额: <strong id="extractSales"
+                        style="display:inline;font-size:16px;">$0</strong></span>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>🔗 快捷访问</h3>
+            <button class="upload-btn" id="fullToolBtn">
+                打开完整版工具
+            </button>
+        </div>
+
+        <div class="footer">
+            Powered by Cybreturn · v1.0
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+
+</html>
