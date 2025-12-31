@@ -4,11 +4,11 @@
 <head>
     <meta charset="UTF-8">
     <title>亚马逊 CGL 智能体 - 旗舰合规版</title>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.5.1/mammoth.browser.min.js"></script>
     <style>
@@ -134,16 +134,7 @@
                 }
             }, [db]);
 
-            // 自动修复/迁移逻辑：如果发现当前 DB 缺失核心规则，强制更新
-            useEffect(() => {
-                const hasNewRules = db.some(r => r.keywords && r.keywords.includes('welder'));
-                if (!hasNewRules) {
-                    console.warn("Detected outdated DB. Forcing update to new DEFAULT_DB...");
-                    setDb(DEFAULT_DB);
-                    localStorage.setItem('cgl_db_v2', JSON.stringify(DEFAULT_DB));
-                    alert("系统已自动升级风险规则库，包含五金、劳保等新分类！");
-                }
-            }, [db]);
+
 
             // 核心处理函数：处理上传的销售报告
             const processMerchantReport = (data) => {
@@ -191,7 +182,24 @@
                         if (hit && idx < 5) console.log(`   ✅ Matched Rule [${d.cat}] using keyword: "${hit}"`);
 
                         return !!hit;
-                    }) || { id: '10000', cat: '普通百货/General MDSE', cls: 'B', rate: 0.00065, min: 4500, keywords: 'general,merchandise' };
+                    });
+
+                    // 兜底逻辑：如果没匹配上
+                    if (!match) {
+                        // 1. 尝试找数据库里的“通用”或“其他”类
+                        const genericMatch = db.find(d => {
+                            const k = d.keywords?.toLowerCase() || '';
+                            const c = d.cat?.toLowerCase() || '';
+                            return k.includes('general') || k.includes('other') || k.includes('其他') || k.includes('通用') ||
+                                c.includes('general') || c.includes('other') || c.includes('其他') || c.includes('通用');
+                        });
+
+                        // 2. 如果没找到通用类，就找数据库里的第一条作为兜底
+                        // (通常第一条是费率较低的基础类，或者用户上传的第一个类)
+                        match = genericMatch || db[0] || { id: '99999', cat: '未识别分类/Uncategorized', cls: 'B', rate: 0.001, min: 5000 };
+
+                        if (idx < 5) console.log(`   ⚠️ No match found. Fallback to: [${match.cat}] (ID: ${match.id})`);
+                    }
 
                     return { title, salesValue, ...match };
                 });
@@ -348,45 +356,47 @@
                 let matchCount = 0;
 
                 lines.forEach(line => {
-                    // 1. 优先尝试匹配 SKU 格式 (8位以上字母数字组合)
-                    const skuMatch = line.match(/\b([A-Z0-9]{8,})\b/i);
-                    // 2. 尝试匹配金额
-                    const salesMatch = line.match(/[\$¥￥]?\s?([0-9,]+\.?\d*)/);
+                    // 预处理：去掉两端空格
+                    const content = line.trim();
+                    if (!content) return;
 
                     let description = '';
                     let sales = 0;
 
-                    if (skuMatch) {
-                        description = skuMatch[1]; // 提取到的 SKU
+                    // 策略 1: Tab 分隔符 (Excel copy-paste 或 TSV 格式)
+                    // 这是最准确的，通常第一列或最长的一列是名称
+                    if (content.includes('\t')) {
+                        const parts = content.split('\t');
+                        // 找最长的一段文本，大概率是产品描述
+                        description = parts.reduce((a, b) => a.length > b.length ? a : b, '');
 
-                        // 如果有 SKU，尝试找金额
-                        if (salesMatch) {
-                            sales = parseFloat(salesMatch[1].replace(/,/g, ''));
+                        // 找看起来像金额的列
+                        const moneyPart = parts.find(p => /[\$¥￥]?\s?[0-9,]+\.\d{2}/.test(p) || (p.match(/[0-9]/) && p.length < 10));
+                        if (moneyPart) {
+                            sales = parseFloat(moneyPart.replace(/[^0-9.]/g, '')) || 0;
                         }
+                    }
+                    // 策略 2: 单纯的长文本行 (通常是产品列表)
+                    else {
+                        // 如果这一行包含金额格式，尝试分割
+                        const salesMatch = content.match(/[\t\s]+[\$¥￥]?([0-9,]+\.?\d*)$/); // 匹配末尾的金额
 
-                        // 只要有 SKU，即使金额为 0 也录入
+                        if (salesMatch) {
+                            sales = parseFloat(salesMatch[1].replace(/,/g, '')) || 0;
+                            description = content.replace(salesMatch[0], '').trim();
+                        } else {
+                            // 否则，整行都是描述！不要自作聪明去提取 SKU
+                            description = content;
+                        }
+                    }
+
+                    // 过滤掉太短的无意义行 (比如页码、表头)
+                    if (description.length > 3 && !['description', 'product', 'sales', 'sku'].includes(description.toLowerCase())) {
                         parsedData.push({
                             'Product Description': description,
-                            'Sales': isNaN(sales) ? 0 : sales
+                            'Sales': sales
                         });
                         matchCount++;
-
-                    } else {
-                        // 如果没有 SKU，尝试回退到旧的分隔符逻辑 (兼容普通商品名)
-                        const parts = line.trim().split(/\s+/);
-                        if (parts.length >= 2) {
-                            const lastPart = parts[parts.length - 1].replace(/[\$¥￥,]/g, '');
-                            const potentialSales = parseFloat(lastPart);
-
-                            if (!isNaN(potentialSales) && potentialSales > 0) {
-                                description = parts.slice(0, -1).join(' '); // 假设前面是名称
-                                parsedData.push({
-                                    'Product Description': description,
-                                    'Sales': potentialSales
-                                });
-                                matchCount++;
-                            }
-                        }
                     }
                 });
 
@@ -678,53 +688,7 @@
                                                 </div>
                                             </div>
 
-                                            <div className="space-y-6">
-                                                <div className="flex items-center gap-4 border-b pb-6">
-                                                    <h4 className="text-2xl font-black tracking-tight text-gray-900 italic">Risk Categorization Summary (品类汇总计费表)</h4>
-                                                </div>
-                                                <div className="overflow-x-auto no-scrollbar">
-                                                    <table className="w-full text-xs text-left border-separate border-spacing-y-2">
-                                                        <thead>
-                                                            <tr className="text-gray-400 font-black uppercase tracking-widest">
-                                                                <th className="pb-4 px-6">Risk Category (Code)</th>
-                                                                <th className="pb-4 px-6 text-right">Allocated Sales (USD)</th>
-                                                                <th className="pb-4 px-6 text-center">Effective Rate</th>
-                                                                <th className="pb-4 px-6 text-center">Min Prem (RMB)</th>
-                                                                <th className="pb-4 px-6 text-right">Category Prem (RMB)</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="space-y-4">
-                                                            {groupedResults.map((g, i) => (
-                                                                <tr key={i} className="bg-gray-50/50 hover:bg-blue-50/50 transition-all group overflow-hidden rounded-[24px]">
-                                                                    <td className="py-6 px-6 font-black rounded-l-[24px]">
-                                                                        <div className="flex flex-col">
-                                                                            <span className="text-gray-900 text-sm">{g.cat}</span>
-                                                                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Code {g.id} | {g.itemsCount} SKUs</span>
-                                                                        </div>
-                                                                    </td>
-                                                                    <td className="py-6 px-6 text-right font-bold text-gray-500 tabular-nums">
-                                                                        ${fComm(g.declaredSales || g.allocatedSales)}
-                                                                    </td>
-                                                                    <td className="py-6 px-6 text-center font-mono font-black text-blue-600">
-                                                                        {(g.effectiveRate * 100).toFixed(4)}%
-                                                                    </td>
-                                                                    <td className="py-6 px-6 text-center font-bold text-gray-400">
-                                                                        ¥{fComm(g.effectiveMin)}
-                                                                    </td>
-                                                                    <td className="py-6 px-6 text-right rounded-r-[24px]">
-                                                                        <div className="flex flex-col items-end">
-                                                                            <span className="text-base font-black text-gray-900 tabular-nums">¥{fComm(g.finalGroupPrem)}</span>
-                                                                            <span className={`text-[8px] px-1.5 py-0.5 rounded font-black uppercase ${g.isMinApplied ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600'}`}>
-                                                                                {g.isMinApplied ? 'Min Applied (阈值内)' : 'Rate Applied (超阈值)'}
-                                                                            </span>
-                                                                        </div>
-                                                                    </td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
+
 
                                             {/* 新增: 风险分类汇总与申报卡片区 */}
                                             <div className="space-y-6 pt-12 border-t border-gray-100">
@@ -795,7 +759,10 @@
                                                                     <div className="p-6 bg-gray-50/50 space-y-2">
                                                                         {group.items?.map((item, idx) => (
                                                                             <div key={idx} className="flex justify-between items-center text-sm py-2 border-b border-gray-100 last:border-0 border-dashed">
-                                                                                <span className="text-gray-600 font-medium truncate max-w-[70%]">{item.title}</span>
+                                                                                <div className="flex flex-col max-w-[70%]">
+                                                                                    <span className="text-[10px] font-black text-gray-400 uppercase">{item.id}</span>
+                                                                                    <span className="text-gray-600 font-medium truncate">{item.title}</span>
+                                                                                </div>
                                                                                 <span className="text-gray-400 font-mono">${fComm(item.salesValue)}</span>
                                                                             </div>
                                                                         ))}
@@ -807,24 +774,55 @@
                                                 </div>
                                             </div>
                                             <div className="pt-12 border-t space-y-4">
-                                                <h5 className="text-sm font-black text-gray-400 uppercase tracking-widest px-4">原始 SKU 匹配明细明细</h5>
-                                                <div className="max-h-[400px] overflow-y-auto no-scrollbar border rounded-[32px] bg-white">
-                                                    <table className="w-full text-[11px] text-left">
-                                                        <thead className="sticky top-0 bg-gray-50 border-b">
+                                                <h5 className="text-sm font-black text-gray-400 uppercase tracking-widest px-4">产品分类与风险匹配明细 (Detailed Risk Classification)</h5>
+                                                <div className="max-h-[500px] overflow-y-auto custom-scrollbar border rounded-[24px] bg-white shadow-inner">
+                                                    <table className="w-full text-xs text-left border-collapse">
+                                                        <thead className="sticky top-0 bg-gray-100/90 backdrop-blur z-10 border-b border-gray-200 shadow-sm">
                                                             <tr>
-                                                                <th className="p-4 uppercase tracking-widest">Description</th>
-                                                                <th className="p-4 uppercase tracking-widest">Sales (Excel)</th>
-                                                                <th className="p-4 uppercase tracking-widest">Match Result</th>
+                                                                <th className="p-4 font-black text-gray-500 uppercase tracking-tight text-[10px] w-12 text-center">SKU</th>
+                                                                <th className="p-4 font-black text-gray-500 uppercase tracking-tight text-[10px] w-1/4">Product Description (简述)</th>
+                                                                <th className="p-4 font-black text-gray-500 uppercase tracking-tight text-[10px]">Suggested Category</th>
+                                                                <th className="p-4 font-black text-gray-500 uppercase tracking-tight text-[10px] w-20 text-center">Risk Code</th>
+                                                                <th className="p-4 font-black text-gray-500 uppercase tracking-tight text-[10px] w-16 text-center">Class</th>
+                                                                <th className="p-4 font-black text-gray-500 uppercase tracking-tight text-[10px] w-20 text-center">Status</th>
+                                                                <th className="p-4 font-black text-gray-500 uppercase tracking-tight text-[10px] w-1/4">Reason (匹配与风险分析)</th>
                                                             </tr>
                                                         </thead>
-                                                        <tbody className="divide-y">
-                                                            {merchantResults.map((r, i) => (
-                                                                <tr key={i} className="hover:bg-gray-50/50">
-                                                                    <td className="p-4 font-bold text-gray-600 max-w-sm truncate">{r.title}</td>
-                                                                    <td className="p-4 tabular-nums font-mono text-gray-400">${fComm(r.salesValue)}</td>
-                                                                    <td className="p-4"><span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded font-bold">{r.cat}</span></td>
-                                                                </tr>
-                                                            ))}
+                                                        <tbody className="divide-y divide-gray-100">
+                                                            {merchantResults.map((r, i) => {
+                                                                const isExcluded = r.cls === 'Excluded';
+                                                                const isHighRisk = r.cls === 'C';
+                                                                const status = isExcluded ? '不可保' : (isHighRisk ? '需核保' : '可保');
+                                                                const statusColor = isExcluded ? 'bg-red-100 text-red-600' : (isHighRisk ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600');
+                                                                const keywords = r.keywords ? r.keywords.split(',').slice(0, 3).join(', ') : 'N/A';
+
+                                                                return (
+                                                                    <tr key={i} className="hover:bg-blue-50/30 transition-colors group">
+                                                                        <td className="p-3 text-center font-mono text-gray-400 font-bold border-r border-gray-50 text-[10px]">{i + 1}</td>
+                                                                        <td className="p-3 font-medium text-gray-700 truncate max-w-xs group-hover:whitespace-normal group-hover:text-blue-800 transition-all border-r border-gray-50" title={r.title}>
+                                                                            {r.title}
+                                                                        </td>
+                                                                        <td className="p-3 text-gray-600 border-r border-gray-50 font-medium">
+                                                                            {r.cat}
+                                                                        </td>
+                                                                        <td className="p-3 text-center font-mono text-gray-500 border-r border-gray-50 bg-gray-50/30">{r.id}</td>
+                                                                        <td className={`p-3 text-center font-bold border-r border-gray-50 ${isExcluded ? 'text-red-600' : 'text-gray-600'}`}>
+                                                                            {r.cls}
+                                                                        </td>
+                                                                        <td className="p-3 text-center border-r border-gray-50">
+                                                                            <span className={`px-2 py-1 rounded-[4px] font-bold text-[10px] ${statusColor}`}>
+                                                                                {status}
+                                                                            </span>
+                                                                        </td>
+                                                                        <td className="p-3 text-gray-400 text-[10px] leading-relaxed">
+                                                                            {isExcluded
+                                                                                ? `⚠️ 此类产品 (${keywords}...) 属于除外责任，不可在 CGL 中承保，请单独申报。`
+                                                                                : `✅ 匹配关键词 [${keywords}]，符合 ${r.cat} 定义，建议归类为 ${r.cls} 类风险。`
+                                                                            }
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })}
                                                         </tbody>
                                                     </table>
                                                 </div>
