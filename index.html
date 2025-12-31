@@ -789,40 +789,82 @@
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-gray-100">
-                                                            {merchantResults.map((r, i) => {
-                                                                const isExcluded = r.cls === 'Excluded';
-                                                                const isHighRisk = r.cls === 'C';
-                                                                const status = isExcluded ? '不可保' : (isHighRisk ? '需核保' : '可保');
-                                                                const statusColor = isExcluded ? 'bg-red-100 text-red-600' : (isHighRisk ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600');
-                                                                const keywords = r.keywords ? r.keywords.split(',').slice(0, 3).join(', ') : 'N/A';
+                                                            {(() => {
+                                                                let lastCatId = null; // Track previous category to handle "Idem"
 
-                                                                return (
-                                                                    <tr key={i} className="hover:bg-blue-50/30 transition-colors group">
-                                                                        <td className="p-3 text-center font-mono text-gray-400 font-bold border-r border-gray-50 text-[10px]">{i + 1}</td>
-                                                                        <td className="p-3 font-medium text-gray-700 truncate max-w-xs group-hover:whitespace-normal group-hover:text-blue-800 transition-all border-r border-gray-50" title={r.title}>
-                                                                            {r.title}
-                                                                        </td>
-                                                                        <td className="p-3 text-gray-600 border-r border-gray-50 font-medium">
-                                                                            {r.cat}
-                                                                        </td>
-                                                                        <td className="p-3 text-center font-mono text-gray-500 border-r border-gray-50 bg-gray-50/30">{r.id}</td>
-                                                                        <td className={`p-3 text-center font-bold border-r border-gray-50 ${isExcluded ? 'text-red-600' : 'text-gray-600'}`}>
-                                                                            {r.cls}
-                                                                        </td>
-                                                                        <td className="p-3 text-center border-r border-gray-50">
-                                                                            <span className={`px-2 py-1 rounded-[4px] font-bold text-[10px] ${statusColor}`}>
-                                                                                {status}
-                                                                            </span>
-                                                                        </td>
-                                                                        <td className="p-3 text-gray-400 text-[10px] leading-relaxed">
-                                                                            {isExcluded
-                                                                                ? `⚠️ 此类产品 (${keywords}...) 属于除外责任，不可在 CGL 中承保，请单独申报。`
-                                                                                : `✅ 匹配关键词 [${keywords}]，符合 ${r.cat} 定义，建议归类为 ${r.cls} 类风险。`
-                                                                            }
-                                                                        </td>
-                                                                    </tr>
-                                                                );
-                                                            })}
+                                                                // Professional Risk Analysis Database (Expert Knowledge Base)
+                                                                const RISK_KB = {
+                                                                    '11213': '高危焊接作业风险：涉及高温熔融金属与高电压，极易引发严重烧伤、火灾及烟尘吸入伤害。历史重案多涉及设备漏电导致操作工电击身亡，或火花引燃周边易燃物导致厂房损毁。属于严格承保限制类目。',
+                                                                    '10203': '锂电热失控风险：18650/聚合物电池在过充、穿刺或高温下极易发生剧烈燃烧爆炸。根据 CPSC 数据，移动电源引发的火灾造成的人身伤害索赔平均赔付额极高，且涉及航运与仓储累积风险。',
+                                                                    '12240': '头部防护失效风险：头盔若不符合 ANSI/DOT 冲击标准，在事故中碎裂将导致严重的颅脑损伤（TBI）。此类产品责任险核心关注“设计缺陷”指控，一旦防护失败，通常面临百万美元级的巨额人身伤害索赔。',
+                                                                    '90001': '儿童窒息与毒性风险：核心风险点为小部件（Small Parts）脱落导致的窒息（Choking Hazard）及材料重金属超标。美国 ASTM F963 标准对此类产品有极严格的合规要求，召回率极高。',
+                                                                    '11113': '高功率热源风险：取暖器类产品是冬季家庭火灾的主要诱因之一。主要故障模式包括温控器失效导致的持续加热引燃织物，或倾倒断电保护(Tip-over Switch)失灵。火灾责任索赔通常涉及重大财产损失与伤亡。',
+                                                                    '11209': '高速机械伤害风险：电动工具（如电锯、磨光机）拥有高速旋转部件，操作失误或防护罩破碎易导致严重割伤、断指甚至失明。北美地区此类产品涉及的“未充分警示（Failure to Warn）”诉讼案件频发。',
+                                                                    '10406': '厨电火灾与烫伤风险：加热类小家电（空炸、咖啡机）涉及水电接触与高温表面。常见索赔案例包括温控失效导致的过热火灾，或液体喷溅导致的严重烫伤。',
+                                                                    '11210': '手动工具断裂风险：虽然无动力源，但扳手、锤子等工具在高扭矩或冲击下可能发生金属疲劳断裂，崩飞的碎片可能导致眼部受损或割伤。主要风险点在于材质热处理工艺不达标导致的强度不足。',
+                                                                    '10905': '劳保虚假防护风险：若标榜“防割”、“防火”但实际未达标，将导致用户在危险环境下失去预期保护，引发惩罚性赔偿诉讼。若作为普通非防护工装销售，风险相对可控。',
+                                                                    '10137': '汽配关键部件风险：涉及行车安全。若刹车片、悬挂件等关键部位失效，可能导致交通事故。即便非关键件（如内饰），也需关注材料阻燃性与挥发物合规。',
+                                                                    '10407': '电子电气短路风险：主要涉及充电适配器过热、线材短路引发的火灾。UL/ETL 认证是极其关键的抗辩依据。',
+                                                                    '10000': '一般性贸易风险：通常指低价值、无动力源、与人体非密切接触的日用杂货。风险敞口较低，多为简单的异物划伤或包装致伤等小额索赔。'
+                                                                };
+
+                                                                return merchantResults.map((r, i) => {
+                                                                    const isExcluded = r.cls === 'Excluded';
+                                                                    const isHighRisk = r.cls === 'C';
+                                                                    const status = isExcluded ? '不可保' : (isHighRisk ? '需核保' : '可保');
+                                                                    const statusColor = isExcluded ? 'bg-red-100 text-red-600' : (isHighRisk ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600');
+                                                                    const keywords = r.keywords ? r.keywords.split(',').slice(0, 3).join(', ') : 'N/A';
+
+                                                                    // Analysis Logic
+                                                                    let analysisText = '';
+                                                                    const isSameAsLast = lastCatId === r.id;
+
+                                                                    if (isSameAsLast) {
+                                                                        analysisText = <span className="text-gray-300 font-medium italic">—— 同上 (Idem) ——</span>;
+                                                                    } else {
+                                                                        const kbText = RISK_KB[r.id];
+                                                                        if (kbText) {
+                                                                            analysisText = (
+                                                                                <span>
+                                                                                    <strong className="text-gray-700 block mb-1">【专家风险洞察】</strong>
+                                                                                    {kbText}
+                                                                                </span>
+                                                                            );
+                                                                        } else {
+                                                                            // Fallback for codes not in KB
+                                                                            analysisText = isExcluded
+                                                                                ? `⚠️ 除外责任：此类产品 (${keywords}...) 属于标准承保范围之外。通常因其具有极高概率引发重大人身伤害（如高空作业、深海潜水等），保险公司不予承保。`
+                                                                                : `ℹ️ 常规风险：匹配关键词 [${keywords}]，符合 ${r.cat} 定义。建议参照标准 ${r.cls} 类费率承保，重点关注产品使用说明书警示语完整性。`;
+                                                                        }
+                                                                    }
+
+                                                                    lastCatId = r.id; // Update tracker
+
+                                                                    return (
+                                                                        <tr key={i} className="hover:bg-blue-50/30 transition-colors group">
+                                                                            <td className="p-3 text-center font-mono text-gray-400 font-bold border-r border-gray-50 text-[10px]">{i + 1}</td>
+                                                                            <td className="p-3 font-medium text-gray-700 truncate max-w-xs group-hover:whitespace-normal group-hover:text-blue-800 transition-all border-r border-gray-50" title={r.title}>
+                                                                                {r.title}
+                                                                            </td>
+                                                                            <td className="p-3 text-gray-600 border-r border-gray-50 font-medium">
+                                                                                {r.cat}
+                                                                            </td>
+                                                                            <td className="p-3 text-center font-mono text-gray-500 border-r border-gray-50 bg-gray-50/30">{r.id}</td>
+                                                                            <td className={`p-3 text-center font-bold border-r border-gray-50 ${isExcluded ? 'text-red-600' : 'text-gray-600'}`}>
+                                                                                {r.cls}
+                                                                            </td>
+                                                                            <td className="p-3 text-center border-r border-gray-50">
+                                                                                <span className={`px-2 py-1 rounded-[4px] font-bold text-[10px] ${statusColor}`}>
+                                                                                    {status}
+                                                                                </span>
+                                                                            </td>
+                                                                            <td className="p-3 text-gray-500 text-[10px] leading-relaxed text-justify pr-6">
+                                                                                {analysisText}
+                                                                            </td>
+                                                                        </tr>
+                                                                    );
+                                                                });
+                                                            })()}
                                                         </tbody>
                                                     </table>
                                                 </div>
