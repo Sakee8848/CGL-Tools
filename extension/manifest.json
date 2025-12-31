@@ -35,5 +35,13 @@
     "host_permissions": [
         "*://*.amazon.com/*",
         "*://*.amazon.cn/*"
-    ]
+    ],
+    "sandbox": {
+        "pages": [
+            "app.html"
+        ]
+    },
+    "content_security_policy": {
+        "sandbox": "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com https://unpkg.com https://lib.baomitu.com blob: data:;"
+    }
 }

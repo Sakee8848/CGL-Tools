@@ -81,6 +81,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
 
                 // UI 反馈：改为“已同步”
+                console.log("File stored in pendingUpload:", fileName);
                 document.getElementById('fullToolBtn').textContent = '打开完整工具 (文件已就绪)';
                 document.getElementById('fullToolBtn').style.background = '#48bb78'; // Green
                 document.getElementById('fullToolBtn').style.color = 'white';
