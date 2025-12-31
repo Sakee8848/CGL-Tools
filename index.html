@@ -121,7 +121,6 @@
                 localStorage.setItem('cgl_coi_rules', JSON.stringify(coiRules));
             }, [db, logs, exRate, coiRules]);
 
-            // 自动修复/迁移逻辑：如果发现当前 DB 缺失核心规则，强制更新
             useEffect(() => {
                 if (db.length > 0) {
                     const hasNewRules = db.some(r => r.keywords && r.keywords.includes('welder'));
@@ -133,6 +132,58 @@
                     }
                 }
             }, [db]);
+
+            // 🆕 插件联动逻辑：检查是否有来自 Popup 的待处理文件
+            useEffect(() => {
+                if (window.chrome && chrome.storage && chrome.storage.local) {
+                    chrome.storage.local.get(['pendingUpload', 'extractedData'], (result) => {
+                        // 1. 优先处理文件上传
+                        if (result.pendingUpload) {
+                            const { name, type, data } = result.pendingUpload;
+                            console.log("Received file from extension:", name);
+
+                            addLog('EXT_SYNC', `接收到插件同步文件: ${name}`);
+
+                            try {
+                                if (type === 'xlsx' || type === 'xls') {
+                                    // Excel 处理
+                                    const wb = XLSX.read(data.split(',')[1], { type: 'base64' });
+                                    const sheetName = wb.SheetNames[0];
+                                    const jsonData = XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
+                                    processMerchantReport(jsonData);
+                                } else if (type === 'txt' || type === 'csv') {
+                                    // 文本处理
+                                    const textContent = atob(data.split(',')[1]);
+                                    const parsedData = parseTextToData(textContent);
+                                    processMerchantReport(parsedData);
+                                }
+
+                                setView('merchant'); // 切换视图
+
+                                // 清除挂起状态，避免重复加载
+                                chrome.storage.local.remove('pendingUpload');
+
+                            } catch (err) {
+                                console.error("Extension file load error:", err);
+                                alert("插件同步文件加载失败: " + err.message);
+                            }
+                        }
+                        // 2. 处理页面抓取数据
+                        else if (result.extractedData) {
+                            const { items, extractedAt } = result.extractedData;
+                            // 检查是否是一分钟内的新数据
+                            const timeDiff = new Date() - new Date(extractedAt);
+                            if (timeDiff < 60000) {
+                                console.log("Received scraped data:", items.length);
+                                addLog('EXT_XYNC', `接收到页面抓取数据 ${items.length} 条`);
+                                processMerchantReport(items);
+                                setView('merchant');
+                                // chrome.storage.local.remove('extractedData'); // 抓取的数据可以保留供参考，或者也清除
+                            }
+                        }
+                    });
+                }
+            }, []);
 
 
 

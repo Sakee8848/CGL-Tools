@@ -6,9 +6,9 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('fileInput').click();
     });
 
-    // 打开完整版工具
+    // 打开完整版工具 (改为打开插件内的 index.html 以实现数据互通)
     document.getElementById('fullToolBtn').addEventListener('click', function () {
-        chrome.tabs.create({ url: 'https://spontaneous-bublanina-8201df.netlify.app' });
+        chrome.tabs.create({ url: 'index.html' });
     });
 
     // 🆕 抓取当前页面数据
@@ -41,7 +41,12 @@ document.addEventListener('DOMContentLoaded', function () {
                         extractedAt: new Date().toISOString()
                     });
 
-                    alert(`✅ 成功抓取 ${data.itemCount} 条数据！\n点击"打开完整版工具"查看详细分析。`);
+                    // 自动变更按钮状态
+                    document.getElementById('fullToolBtn').textContent = '打开完整版工具 (已同步数据)';
+                    document.getElementById('fullToolBtn').style.background = '#48bb78';
+                    document.getElementById('fullToolBtn').style.color = 'white';
+
+                    alert(`✅ 成功抓取 ${data.itemCount} 条数据！\n数据已同步，点击下方按钮打开完整版工具进行分析。`);
                 } else {
                     alert('⚠️ 未在当前页面检测到销售数据\n\n请确保您在亚马逊卖家中心的业务报告页面。');
                 }
@@ -60,25 +65,45 @@ document.addEventListener('DOMContentLoaded', function () {
         const fileExt = fileName.split('.').pop().toLowerCase();
 
         try {
-            let extractedText = '';
+            // 读取文件为 Base64 以便存储
+            const reader = new FileReader();
+            reader.onload = async function (evt) {
+                const base64Data = evt.target.result; // Data URL
 
-            // 根据文件类型进行处理
-            if (fileExt === 'txt' || fileExt === 'csv') {
-                // 直接读取文本文件
-                extractedText = await file.text();
-                processTextData(extractedText, fileExt);
+                // 存入 chrome.storage.local
+                await chrome.storage.local.set({
+                    pendingUpload: {
+                        name: fileName,
+                        type: fileExt,
+                        data: base64Data,
+                        timestamp: Date.now()
+                    }
+                });
 
-            } else if (fileExt === 'xlsx' || fileExt === 'xls') {
-                // Excel 文件：提示用户使用完整版工具
-                alert('📊 Excel 文件检测成功！\n\n由于浏览器插件环境限制，请点击"打开完整版工具"进行详细分析。\n\n完整版工具支持：\n✓ Excel 完整解析\n✓ 品类智能匹配\n✓ 保费精准计算');
+                // UI 反馈：改为“已同步”
+                document.getElementById('fullToolBtn').textContent = '打开完整工具 (文件已就绪)';
+                document.getElementById('fullToolBtn').style.background = '#48bb78'; // Green
+                document.getElementById('fullToolBtn').style.color = 'white';
 
-            } else if (fileExt === 'pdf' || fileExt === 'docx' || fileExt === 'doc') {
-                // PDF/Word 文件：提示用户使用完整版工具
-                alert('📄 文档文件检测成功！\n\n由于浏览器插件环境限制，请点击"打开完整版工具"进行详细分析。\n\n完整版工具支持：\n✓ PDF 文本提取\n✓ Word 文档解析\n✓ 智能数据识别');
+                // 针对不同文件类型的处理
+                if (fileExt === 'txt' || fileExt === 'csv') {
+                    // 文本文件：尝试直接解析并展示预览
+                    const textContent = atob(base64Data.split(',')[1]); // Decode base64
+                    processTextData(textContent, fileExt);
+                } else {
+                    // Excel/PDF: 仅展示就绪状态
+                    document.getElementById('result').style.display = 'block';
+                    document.getElementById('premium').innerHTML = '<span style="font-size:14px; color:#4a5568;">数据已同步</span>';
 
-            } else {
-                alert('⚠️ 不支持的文件格式\n\n请上传以下格式之一：\n• Excel (.xlsx, .xls)\n• 文本 (.txt, .csv)\n• PDF (.pdf)\n• Word (.docx, .doc)');
-            }
+                    // 修改显示的提示文字
+                    const resultDiv = document.getElementById('result');
+                    const span = resultDiv.querySelector('span');
+                    if (span) span.textContent = "待完整版工具分析";
+
+                    alert('📊 文件已同步！\n\n点击下方 "打开完整版工具" 即可自动加载该文件并开始分析。');
+                }
+            };
+            reader.readAsDataURL(file);
 
         } catch (err) {
             console.error('文件处理失败:', err);
@@ -117,9 +142,13 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('premium').textContent =
                 '¥' + new Intl.NumberFormat('zh-CN').format(mockPremium.toFixed(2));
 
-            alert(`✅ 文本解析成功！\n\n检测到 ${skuCount} 个SKU\n总销售额: $${totalSales.toFixed(2)}\n\n💡 点击"打开完整版工具"获取详细分析`);
+            // 修改显示的提示文字
+            const resultDiv = document.getElementById('result');
+            const span = resultDiv.querySelector('span');
+            if (span) span.textContent = `预估总保费 (基于 ${skuCount} 个SKU)`;
+
         } else {
-            alert('⚠️ 未能从文件中识别出有效的 SKU 数据\n\n建议：\n1. 确保文件包含 SKU 编码\n2. 或使用完整版工具上传');
+            alert('⚠️ 未能从文件中识别出有效的 SKU 数据\n\n建议直接打开完整版工具进行更深度解析。');
         }
     }
 
