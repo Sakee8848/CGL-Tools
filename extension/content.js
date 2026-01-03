@@ -99,88 +99,95 @@ function extractAmazonData() {
         }
     }
 
-    // 方案4: 亚马逊前台页面 (店铺首页、搜索结果页、品牌旗舰店)
+    // 方案4: 亚马逊前台页面 (店铺首页、搜索结果页、品牌旗舰店) - 增强版 V2
     if (results.length === 0) {
-        console.log('🛍️ 尝试抓取前台/店铺页面数据...');
+        console.log('🛍️ 尝试抓取前台/店铺页面数据 (增强模式)...');
 
-        // 1. 尝试抓取店铺导航栏/分类 (Brand Store Categories)
+        // --- 1. 抓取分类 (导航) ---
         const categories = new Set();
-        // 常见导航选择器
-        const navSelectors = [
-            'nav a',
-            'div[role="navigation"] a',
-            '.listings-menu a',
-            '.marathon-text-content' // 品牌旗舰店常见文字容器
-        ];
+        // 针对 Storefront 的特殊导航结构
+        const navLinks = document.querySelectorAll('ul[class*="navigation"] li a, div[data-testid="navigation-item"] a, .listings-menu a');
 
-        navSelectors.forEach(sel => {
-            document.querySelectorAll(sel).forEach(link => {
-                const text = link.innerText.trim();
-                // 过滤掉无关的短词和通用词
-                if (text && text.length > 2 && text.length < 30 && !['Home', 'Contact', 'Cart', 'Menu', 'Sign in'].includes(text)) {
-                    categories.add(text);
-                }
-            });
-        });
-
-        const detectedCategories = [...categories].slice(0, 5).join(', '); // 取前5个作为参考
-        console.log('📂 检测到可能的分类:', detectedCategories);
-
-        // 2. 尝试抓取商品列表 (Search Results / Storefront Grid)
-        const productSelectors = [
-            '.s-result-item[data-asin]',       // 搜索结果标准卡片
-            'li.product-grid-item',            // 部分店铺网格
-            '.bxc-grid__column',                // 品牌页面网格
-            'div[data-component-type="s-search-result"]' // 另一种搜索结果
-        ];
-
-        let foundCards = [];
-        productSelectors.forEach(sel => {
-            if (foundCards.length === 0) {
-                const els = document.querySelectorAll(sel);
-                if (els.length > 0) foundCards = els;
+        navLinks.forEach(link => {
+            const text = link.innerText.trim();
+            // 严格过滤：排除短词、全大写通用词、由特殊字符组成的词
+            if (text.length > 3 && text.length < 25 &&
+                !/^(HOME|CART|SEARCH|MENU|OPT|SHIFT|ALT|CTRL|TAB)$/i.test(text) &&
+                !/[{}[\]<>\\]/.test(text)) {
+                categories.add(text);
             }
         });
 
-        if (foundCards.length > 0) {
-            console.log(`🧩 找到 ${foundCards.length} 个商品卡片`);
-
-            foundCards.forEach(card => {
-                // 尝试获取 ASIN
-                let asin = card.getAttribute('data-asin');
-
-                // 尝试获取标题
-                const titleEl = card.querySelector('h2, .a-size-base-plus, .a-text-normal, [class*="title"], h3');
-                let title = titleEl ? titleEl.innerText.trim() : '';
-
-                // 尝试获取价格
-                const priceEl = card.querySelector('.a-price .a-offscreen, .a-price-whole');
-                const price = priceEl ? parseFloat(priceEl.innerText.replace(/[^0-9.]/g, '')) : 0;
-
-                // 如果没有直接 ASIN，尝试从链接提取
-                if (!asin) {
-                    const link = card.querySelector('a');
-                    if (link && link.href) {
-                        const match = link.href.match(/\/dp\/([A-Z0-9]{10})/);
-                        if (match) asin = match[1];
-                    }
-                }
-
-                if (title && title.length > 3) {
-                    // 优化：如果标题太短，可能抓错了，尝试把检测到的分类加进去辅助识别
-                    const finalName = (detectedCategories && title.length < 10) ? `${detectedCategories} - ${title}` : title;
-
-                    results.push({
-                        sku: asin || 'Unknown-SKU',
-                        name: finalName,
-                        sales: 0, // 前台看不到具体销售额，置0让用户手动填或按比例
-                        price: price,
-                        source: 'storefront-scan',
-                        category_hint: detectedCategories, // 额外字段供参考
-                        note: '前台抓取数据'
-                    });
-                }
+        // 如果上面没抓到，尝试抓取页面所有的 H2 标题作为分类参考
+        if (categories.size === 0) {
+            document.querySelectorAll('h2').forEach(h => {
+                if (h.innerText.length < 20) categories.add(h.innerText.trim());
             });
+        }
+
+        const detectedCategories = [...categories].slice(0, 5).join(' / ');
+        console.log('📂 检测到可能的分类:', detectedCategories || "未识别到明确分类");
+
+
+        // --- 2. 抓取商品 (通用视觉识别法) ---
+        // 策略：寻找所有包含“价格”特征的容器，然后向上查找其父容器作为商品卡片
+
+        const pricePattern = /[\$£€¥]\d+([.,]\d{2})?|\d+([.,]\d{2})?\s*[\$£€¥]/;
+        const allElements = document.body.getElementsByTagName('*');
+
+        for (let i = 0; i < allElements.length; i++) {
+            const el = allElements[i];
+            // 只检查文本节点，且包含价格符号
+            if (el.children.length === 0 && pricePattern.test(el.innerText)) {
+                // 找到一个价格标签！
+                // 向上找 3-5 层父级，判断是否像一个“商品卡片”
+                let card = el.parentElement;
+                let foundCard = false;
+
+                // 向上遍历，寻找包含图片和标题的容器
+                for (let k = 0; k < 5; k++) {
+                    if (!card) break;
+                    const hasImg = card.querySelector('img');
+                    const hasTitle = card.innerText.length > 20; // 整个卡片文字量应该足够多
+
+                    if (hasImg && hasTitle) {
+                        // 这是一个合格的商品卡片
+                        const rawText = card.innerText;
+                        const lines = rawText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+                        // 提取标题：通常是除了价格之外最长的一行文字
+                        let title = lines.sort((a, b) => b.length - a.length)[0];
+
+                        // 提取价格：从当前价格标签提取
+                        let priceVal = parseFloat(el.innerText.replace(/[^0-9.]/g, ''));
+
+                        // 提取 ASIN (尝试从链接)
+                        let asin = null;
+                        const link = card.querySelector('a[href*="/dp/"]');
+                        if (link) {
+                            const m = link.href.match(/\/dp\/([A-Z0-9]{10})/);
+                            if (m) asin = m[1];
+                        }
+
+                        // 去重添加
+                        if (title && title.length > 5 && !results.some(r => r.name === title)) {
+                            results.push({
+                                sku: asin || `DETECTED-${results.length + 1}`,
+                                name: title,
+                                sales: 0,
+                                price: priceVal,
+                                source: 'visual-scan',
+                                category_hint: detectedCategories,
+                                note: '视觉识别抓取'
+                            });
+                        }
+                        foundCard = true;
+                        break; // 找到父级卡片后，停止向上
+                    }
+                    card = card.parentElement;
+                }
+            }
+            if (results.length > 50) break; // 限制抓取数量
         }
     }
 
