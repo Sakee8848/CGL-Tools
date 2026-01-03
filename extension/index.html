@@ -24,9 +24,8 @@
 
 <body>
     <iframe id="appFrame"></iframe>
-    <script>
-        document.getElementById('appFrame').src = 'app.html?v=' + new Date().getTime();
-    </script>
+    <!-- External script to comply with Manifest V3 CSP -->
+    <script src="loader.js"></script>
     <script src="bridge.js"></script>
 </body>
 

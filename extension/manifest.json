@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Cybreturn CGL 智能助手",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "description": "亚马逊 CGL 智能合规预审与报价工具",
     "action": {
         "default_popup": "popup.html",
@@ -48,7 +48,7 @@
         ]
     },
     "content_security_policy": {
-        "extension_pages": "script-src 'self' 'unsafe-inline'; object-src 'self'",
+        "extension_pages": "script-src 'self'; object-src 'self'",
         "sandbox": "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com https://unpkg.com https://lib.baomitu.com blob: data:;"
     }
 }
