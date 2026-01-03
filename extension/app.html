@@ -159,8 +159,13 @@
                     if (!hasNewRules) {
                         console.warn("Detected outdated DB. Forcing update to new DEFAULT_DB...");
                         setDb(DEFAULT_DB);
-                        // localStorage update will happen via the main useEffect
                         alert("系统已自动升级风险规则库，包含五金、劳保等新分类！");
+                    }
+
+                    // 自动重算：当费率表(db)发生变化且已有匹配结果时，重新计算
+                    if (merchantResults.length > 0) {
+                        console.log("DB updated, recalculating premiums...");
+                        processMerchantReport(merchantResults);
                     }
                 }
             }, [db]);
@@ -364,27 +369,57 @@
                 setGroupedResults(groupsArray);
                 setTotalFinalPrem(groupsArray.reduce((sum, g) => sum + g.finalGroupPrem, 0));
             };
-            // 新增: 处理组销售额修改
+            // 优化: 处理组销售额修改 (反向联动总销售额)
             const handleGroupSalesChange = (groupId, newVal) => {
                 const val = parseFloat(newVal) || 0;
-                setGroupedResults(prev => {
-                    const newGroups = prev.map(g => {
-                        if (g.id === groupId) {
-                            const newG = { ...g, declaredSales: val };
-                            // 重新计算该组保费
-                            const effectiveRate = deductibleType === '0' ? newG.rate * 1.2 : newG.rate;
-                            const effectiveMin = deductibleType === '0' ? newG.min * 1.2 : newG.min;
-                            let prem = val * effectiveRate * exRate;
-                            newG.finalGroupPrem = Math.max(prem, effectiveMin);
-                            newG.isMinApplied = effectiveMin > prem;
-                            return newG;
-                        }
-                        return g;
-                    });
-                    // 更新总保费
-                    setTotalFinalPrem(newGroups.reduce((sum, g) => sum + g.finalGroupPrem, 0));
-                    return newGroups;
+                let newTotal = 0;
+
+                const newGroups = groupedResults.map(g => {
+                    if (g.id === groupId) {
+                        const newG = { ...g, declaredSales: val };
+                        // 重新计算该组保费
+                        const effectiveRate = deductibleType === '0' ? newG.rate * 1.2 : newG.rate;
+                        const effectiveMin = deductibleType === '0' ? newG.min * 1.2 : newG.min;
+                        let prem = val * effectiveRate * exRate;
+                        newG.finalGroupPrem = Math.max(prem, effectiveMin);
+                        newG.isMinApplied = effectiveMin > prem;
+                        newTotal += val;
+                        return newG;
+                    }
+                    newTotal += g.declaredSales;
+                    return g;
                 });
+
+                setGroupedResults(newGroups);
+                setTotalFinalPrem(newGroups.reduce((sum, g) => sum + g.finalGroupPrem, 0));
+
+                // 更新顶部总额显示，但不触发由总额驱动的重分配 (避免循环)
+                setRevenueRaw(fComm(newTotal));
+            };
+
+            // 优化: 处理顶部总销售额修改 (正向联动: 按权重分配给所有组)
+            const handleTotalRevenueChange = (newTotalRaw) => {
+                const newTotal = parseFloat(newTotalRaw.replace(/[^0-9.]/g, '')) || 0;
+                setRevenueRaw(fComm(newTotal)); // 保持输入框格式化
+
+                if (groupedResults.length > 0) {
+                    const newGroups = groupedResults.map(g => {
+                        const newAllocated = newTotal * g.weight;
+                        const effectiveRate = deductibleType === '0' ? g.rate * 1.2 : g.rate;
+                        const effectiveMin = deductibleType === '0' ? g.min * 1.2 : g.min;
+                        let prem = newAllocated * effectiveRate * exRate;
+
+                        return {
+                            ...g,
+                            declaredSales: newAllocated, // 同步更新申报额
+                            allocatedSales: newAllocated,
+                            finalGroupPrem: Math.max(prem, effectiveMin),
+                            isMinApplied: effectiveMin > prem
+                        };
+                    });
+                    setGroupedResults(newGroups);
+                    setTotalFinalPrem(newGroups.reduce((sum, g) => sum + g.finalGroupPrem, 0));
+                }
             };
 
 
@@ -728,7 +763,7 @@
                                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">全账户预计年度总销售额 (Annual USD Revenue)</label>
                                             <div className="relative">
                                                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 font-bold text-xl">$</span>
-                                                <input type="text" className="w-full pl-10 pr-6 py-3 rounded-[20px] bg-gray-50 border-none font-black text-2xl text-gray-900 focus:bg-white outline-none transition-all" value={revenueRaw} onChange={e => setRevenueRaw(fComm(e.target.value.replace(/[^0-9]/g, '')))} />
+                                                <input type="text" className="w-full pl-10 pr-6 py-3 rounded-[20px] bg-gray-50 border-none font-black text-2xl text-gray-900 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={revenueRaw} onChange={e => handleTotalRevenueChange(e.target.value)} />
                                             </div>
                                         </div>
                                         <div className="space-y-2">
