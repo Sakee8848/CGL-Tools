@@ -212,15 +212,11 @@
                     }
                     // 2. 处理页面抓取数据
                     else if (message.type === 'extractedData') {
-                        const { items, extractedAt } = message.payload;
-                        const timeDiff = new Date() - new Date(extractedAt);
-                        // 放宽时间限制，因为sandbox可能加载慢
-                        if (timeDiff < 300000) {
-                            console.log("Received scraped data:", items.length);
-                            addLog('EXT_XYNC', `接收到页面抓取数据 ${items.length} 条`);
-                            processMerchantReport(items);
-                            setView('merchant');
-                        }
+                        const { items } = message.payload;
+                        console.log("Received scraped data:", items.length);
+                        addLog('EXT_XYNC', `接收到页面抓取数据 ${items.length} 条`);
+                        processMerchantReport(items);
+                        setView('merchant');
                     }
                 };
 
