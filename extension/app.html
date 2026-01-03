@@ -372,8 +372,8 @@
             // 优化: 处理组销售额修改 (反向联动总销售额)
             const handleGroupSalesChange = (groupId, newVal) => {
                 const val = parseFloat(newVal) || 0;
-                let newTotal = 0;
 
+                // 1. 先计算新的分组状态
                 const newGroups = groupedResults.map(g => {
                     if (g.id === groupId) {
                         const newG = { ...g, declaredSales: val };
@@ -383,24 +383,25 @@
                         let prem = val * effectiveRate * exRate;
                         newG.finalGroupPrem = Math.max(prem, effectiveMin);
                         newG.isMinApplied = effectiveMin > prem;
-                        newTotal += val;
                         return newG;
                     }
-                    newTotal += g.declaredSales;
                     return g;
                 });
+
+                // 2. 实时计算新的总销售额
+                const newTotal = newGroups.reduce((sum, g) => sum + g.declaredSales, 0);
 
                 setGroupedResults(newGroups);
                 setTotalFinalPrem(newGroups.reduce((sum, g) => sum + g.finalGroupPrem, 0));
 
-                // 更新顶部总额显示，但不触发由总额驱动的重分配 (避免循环)
+                // 3. 更新顶部总额显示 (仅更新数值，不触发重分配)
                 setRevenueRaw(fComm(newTotal));
             };
 
             // 优化: 处理顶部总销售额修改 (正向联动: 按权重分配给所有组)
             const handleTotalRevenueChange = (newTotalRaw) => {
                 const newTotal = parseFloat(newTotalRaw.replace(/[^0-9.]/g, '')) || 0;
-                setRevenueRaw(fComm(newTotal)); // 保持输入框格式化
+                setRevenueRaw(newTotalRaw); // 保持用户输入体验 (允许输入逗号等)
 
                 if (groupedResults.length > 0) {
                     const newGroups = groupedResults.map(g => {
