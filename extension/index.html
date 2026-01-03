@@ -23,7 +23,10 @@
 </head>
 
 <body>
-    <iframe id="appFrame" src="app.html"></iframe>
+    <iframe id="appFrame"></iframe>
+    <script>
+        document.getElementById('appFrame').src = 'app.html?v=' + new Date().getTime();
+    </script>
     <script src="bridge.js"></script>
 </body>
 
