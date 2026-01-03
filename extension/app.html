@@ -265,7 +265,7 @@
                     // Debug: 打印前5个详情
                     if (idx < 5) console.log(`Processing Item [${idx}]:`, title);
 
-                    const match = db.find(d => {
+                    let match = db.find(d => {
                         const keywords = String(d.keywords || '');
                         const hit = keywords.split(/[,，]/).find(k => {
                             const cleanK = k.trim().toLowerCase();
