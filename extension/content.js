@@ -131,15 +131,22 @@ async function extractAmazonData() {
             // 向上遍历3层通常能找到卡片容器
             let card = link.parentElement;
             let title = '';
+            let imgAlt = '';
             let price = 0;
 
             for (let k = 0; k < 4; k++) {
                 if (!card) break;
 
+                // 尝试找图片作为备用标题
+                if (!imgAlt) {
+                    const img = card.querySelector('img');
+                    if (img && img.alt && img.alt.length > 3) imgAlt = img.alt;
+                }
+
                 // 尝试找标题
                 if (!title) {
                     const t = card.innerText.trim();
-                    if (t.length > 10 && t.length < 200) title = t.split('\n')[0];
+                    if (t.length > 3 && t.length < 200) title = t.split('\n')[0];
                 }
 
                 // 尝试找价格
@@ -155,7 +162,7 @@ async function extractAmazonData() {
             if (!results.some(r => r.sku === asin)) {
                 results.push({
                     sku: asin,
-                    name: title || 'Storefront Item',
+                    name: title || imgAlt || 'Storefront Item',
                     sales: 0,
                     price: price,
                     source: 'storefront-scan',
@@ -209,7 +216,8 @@ async function extractAmazonData() {
     // 去重与清洗 (Deduplication & Cleaning)
     const uniqueResults = [];
     const seen = new Set();
-    const invalidTitles = /^(quick look|storefront item|shop now|see options|add to cart|currently unavailable)$/i;
+    // 移除 'storefront item' 以防止误删无标题商品
+    const invalidTitles = /^(quick look|shop now|see options|add to cart|currently unavailable|business card|amazon business card)$/i;
 
     results.forEach(r => {
         // 清洗标题
@@ -217,12 +225,15 @@ async function extractAmazonData() {
 
         // 过滤无效数据
         if (!r.name || r.name.length < 3 || invalidTitles.test(r.name)) {
+            console.log('🗑️ 丢弃无效数据:', r.name, r.sku);
             return;
         }
 
         if (!seen.has(r.sku)) {
             seen.add(r.sku);
             uniqueResults.push(r);
+        } else {
+            console.log('👯‍♂️ 过滤重复 SKU:', r.sku);
         }
     });
 
@@ -231,7 +242,7 @@ async function extractAmazonData() {
         timestamp: new Date().toISOString(),
         pageType: isSeller ? 'seller-central' : 'customer-facing',
         itemCount: uniqueResults.length,
-        items: uniqueResults.slice(0, 100)
+        items: uniqueResults
     };
 }
 

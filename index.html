@@ -11,6 +11,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.5.1/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         body {
             background-color: #F5F5F7;
@@ -165,6 +166,153 @@
         ];
 
 
+        // --- 新增：知识库导入组件 (Knowledge Base Importer) ---
+        const KnowledgeImporter = ({ onImportSuccess }) => {
+            const [uploading, setUploading] = React.useState(false);
+            const [logs, setLogs] = React.useState([]);
+
+            const handleZipUpload = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                setUploading(true);
+                setLogs(['🚀 开始处理知识库压缩包...']);
+                const newEntries = []; // Fix: Declare outside try/catch scope
+
+                try {
+                    const zip = new JSZip();
+                    const zipContent = await zip.loadAsync(file);
+
+                    // Debug Information
+                    const allFiles = Object.keys(zipContent.files);
+                    const docFiles = allFiles.filter(name => name.endsWith('.doc'));
+                    const docxFiles = allFiles.filter(name => !name.startsWith('__MACOSX') && name.endsWith('.docx'));
+
+                    if (docxFiles.length === 0) {
+                        if (docFiles.length > 0) {
+                            setLogs(prev => [...prev, `⚠️ 发现 ${docFiles.length} 个 .doc 格式文档，但本系统仅支持 .docx 格式。建议您将文档另存为 .docx 后重新打包上传。`]);
+                        } else {
+                            setLogs(prev => [...prev, `⚠️ 压缩包中未找到 .docx 文档。共扫描了 ${allFiles.length} 个文件。请确认文件格式正确。`]);
+                        }
+                        setUploading(false);
+                        return;
+                    }
+
+                    setLogs(prev => [...prev, `📂 发现 ${docxFiles.length} 个有效 Word 文档 (.docx)，开始解析...`]);
+
+                    for (let filename of docxFiles) {
+                        try {
+                            const fileData = await zipContent.files[filename].async("arraybuffer");
+
+                            // 使用 Mammoth 解析 Word
+                            const result = await mammoth.convertToHtml({ arrayBuffer: fileData });
+                            const htmlContent = result.value;
+
+                            // 智能提取逻辑 (Smart Extraction)
+                            // 假设文件名即为品类名 (e.g., "Camping Stoves.docx")
+                            const categoryName = filename.replace('.docx', '').split('/').pop();
+
+                            // 简单的关键词提取 (如果文档中有明确的 Risk/Mitigation 标题)
+                            // 这里做一个简单的 HTML 包装作为 deep_analysis
+                            // 优化：LocalStorage 容量有限（通常仅 5MB），无法存几百个完整 Word 的 HTML
+                            // 解决方案：仅提取纯文本的前 800 个字符作为摘要
+                            const rawText = result.value.replace(/<[^>]*>?/gm, ' '); // 剥离 HTML 标签
+                            const truncatedText = rawText.substring(0, 800) + (rawText.length > 800 ? '...' : '');
+
+                            const deepAnalysis = {
+                                focus: `基于专家文档 [${filename}] 的分析`,
+                                cases: `<div class="kb-summary">${truncatedText}</div><br/><small style="color:gray">*由于浏览器存储限制，仅展示文档摘要。请查阅原件。</small>`,
+                                mitigation: "请参考上述专家文档中的详细合规建议。"
+                            };
+
+                            // 构造一个新的 DB Entry
+                            // 生成一个基于文件名的唯一 ID Hash
+                            const idHash = categoryName.split('').reduce((a, b) => a + b.charCodeAt(0), 0).toString().slice(0, 5);
+
+                            const newEntry = {
+                                id: `IMP-${idHash}`,
+                                cat: categoryName, // 使用文件名作为分类
+                                cls: 'Referral', // 默认为待人工核保，因为我们不知道费率
+                                rate: 0,
+                                min: 0,
+                                keywords: categoryName.toLowerCase().replace(/_/g, ','), // 将文件名转为关键词
+                                deep_analysis: deepAnalysis,
+                                isImported: true
+                            };
+
+                            newEntries.push(newEntry);
+                            setLogs(prev => [...prev, `✅ 解析成功: ${categoryName}`]);
+
+                        } catch (err) {
+                            console.error(err);
+                            setLogs(prev => [...prev, `❌ 解析失败: ${filename} - ${err.message}`]);
+                        }
+                    }
+
+                    // 合并到现有数据库
+                    if (newEntries.length > 0) {
+                        const currentDB = JSON.parse(localStorage.getItem('cgl_db_v3') || '[]');
+                        // 简单的去重合并策略：如果同名则覆盖，否则追加
+                        const updatedDB = [...currentDB];
+
+                        newEntries.forEach(ENTRY => {
+                            const idx = updatedDB.findIndex(d => d.cat === ENTRY.cat);
+                            if (idx > -1) {
+                                // 仅更新 deep_analysis
+                                updatedDB[idx].deep_analysis = ENTRY.deep_analysis;
+                            } else {
+                                updatedDB.push(ENTRY);
+                            }
+                        });
+
+                        localStorage.setItem('cgl_db_v3', JSON.stringify(updatedDB));
+                        setLogs(prev => [...prev, `🎉 成功导入 ${newEntries.length} 条专家知识！数据库已更新。`]);
+
+                        if (onImportSuccess) onImportSuccess();
+
+                        setTimeout(() => {
+                            alert(`成功从文档库中导入 ${newEntries.length} 个新的风险品类！\n\n新导入的品类将自动用于后续的风险分析。`);
+                        }, 500);
+                    }
+
+                } catch (error) {
+                    setLogs(prev => [...prev, `🔥 严重错误: ${error.message}`]);
+                } finally {
+                    setUploading(false);
+                }
+            };
+
+            return (
+                <div style={{ marginTop: '20px', padding: '20px', background: '#fff', borderRadius: '16px', border: '2px dashed #cbd5e0' }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '10px', display: 'flex', alignItems: 'center' }}>
+                        📚 导入专家知识库 (ZIP/Word)
+                        <span style={{ fontSize: '10px', background: '#edf2f7', padding: '2px 6px', borderRadius: '4px', marginLeft: '8px', color: '#718096' }}>
+                            Beta
+                        </span>
+                    </h3>
+                    <p style={{ fontSize: '12px', color: '#718096', marginBottom: '16px' }}>
+                        支持批量导入 .zip 格式的压缩包。系统将自动解析压缩包内的 Word 文档 (.docx)，并将文件名作为"品类名称"，文档内容作为"深度风险评估"存入数据库。
+                    </p>
+
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        <div style={{ position: 'relative', overflow: 'hidden', display: 'inline-block' }}>
+                            <button className="btn" style={{ background: '#4a5568', color: 'white', padding: '8px 16px', borderRadius: '8px', fontWeight: 'bold', fontSize: '12px' }}>
+                                {uploading ? '⏳ 正在解析...' : '📂 选择 ZIP 文件'}
+                            </button>
+                            <input type="file" accept=".zip" onChange={handleZipUpload} disabled={uploading}
+                                style={{ position: 'absolute', left: 0, top: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} />
+                        </div>
+                    </div>
+
+                    {logs.length > 0 && (
+                        <div style={{ marginTop: '16px', background: '#1a202c', color: '#48bb78', padding: '12px', borderRadius: '8px', fontSize: '10px', maxHeight: '120px', overflowY: 'auto' }}>
+                            {logs.map((log, i) => <div key={i}>{log}</div>)}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
         function App() {
             const [view, setView] = useState('home');
             const [db, setDb] = useState(() => JSON.parse(localStorage.getItem('cgl_db_v2')) || DEFAULT_DB);
@@ -183,6 +331,13 @@
             const [lastUploadStats, setLastUploadStats] = useState(null);
             const [coiStep, setCoiStep] = useState('idle');
             const [coiRules, setCoiRules] = useState(() => JSON.parse(localStorage.getItem('cgl_coi_rules')) || DEFAULT_COI_RULES);
+            const [showImporter, setShowImporter] = React.useState(false);
+
+            // DB Refresh Helper
+            const refreshDB = () => {
+                const storedDB = localStorage.getItem('cgl_db_v3');
+                if (storedDB) setDb(JSON.parse(storedDB));
+            };
 
             // 优化输入体验：本地编辑状态 (解决小数点输入和格式化冲突)
             const [editState, setEditState] = useState({ id: null, val: '' });
@@ -1263,6 +1418,31 @@
                                                     <input type="file" onChange={handleCoiRulesUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
                                                     <button className="px-4 py-2 bg-white border rounded-xl text-[10px] font-black group-hover:bg-green-500 group-hover:text-white transition-all shadow-sm">UPLOAD</button>
                                                 </div>
+                                            </div>
+
+                                            <div className="space-y-4 md:col-span-2">
+                                                <div className="flex justify-between items-center">
+                                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">专家知识库管理 (Knowledge Base)</label>
+                                                    <button onClick={() => setShowImporter(!showImporter)} className="text-[10px] font-bold text-blue-500 hover:text-blue-700 transition-colors">
+                                                        {showImporter ? '收起导入器' : '展开导入器'}
+                                                    </button>
+                                                </div>
+
+                                                {/* KB Importer Zone */}
+                                                {!showImporter ? (
+                                                    <div onClick={() => setShowImporter(true)} className="border-2 border-dashed border-gray-100 rounded-[24px] p-6 bg-gray-50 flex items-center justify-between group hover:border-indigo-400 transition-all cursor-pointer relative">
+                                                        <div className="flex gap-6 items-center">
+                                                            <div className="text-2xl">📚</div>
+                                                            <div className="text-left">
+                                                                <p className="text-xs font-black text-gray-900">导入专家核保知识 (.zip)</p>
+                                                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">一键解析 Word 文档，更新风险洞察库</p>
+                                                            </div>
+                                                        </div>
+                                                        <span className="px-4 py-2 bg-white border rounded-xl text-[10px] font-black group-hover:bg-indigo-500 group-hover:text-white transition-all shadow-sm">IMPORT</span>
+                                                    </div>
+                                                ) : (
+                                                    <KnowledgeImporter onImportSuccess={() => { refreshDB(); addLog('KB Import', '成功更新了专家知识库'); }} />
+                                                )}
                                             </div>
 
                                             <div className="space-y-4 md:col-span-2">
