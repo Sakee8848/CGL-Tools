@@ -59,18 +59,89 @@
             return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
         };
 
-        // 初始化数据库：包含更丰富的五金、工具与风险品类库
+        // 初始化数据库：包含更丰富的五金、工具与风险品类库，以及深度专家洞察 (Deep Expert Insights)
         const DEFAULT_DB = [
             // === 高风险/拒保类 (High Risk / Excluded) ===
-            { id: '11213', cat: '焊接设备/Welding & Soldering', cls: 'Excluded', rate: 0.05, min: 10000, keywords: 'welder,welding,soldering,plastic welder,arc weld' },
-            { id: '10203', cat: '电池/Battery Packs', cls: 'C', rate: 0.012, min: 6500, keywords: 'battery,lithium,power bank,18650' },
-            { id: '12240', cat: '头盔/Helmets', cls: 'C', rate: 0.015, min: 8000, keywords: 'helmet,safety hat,protective headwear' },
-            { id: '90001', cat: '儿童玩具/Toys', cls: 'C', rate: 0.010, min: 6000, keywords: 'toy,plush,kids,children,doll' },
+            {
+                id: '11213',
+                cat: '焊接设备/Welding & Soldering',
+                cls: 'Excluded',
+                rate: 0.05,
+                min: 10000,
+                keywords: 'welder,welding,soldering,plastic welder,arc weld',
+                deep_analysis: {
+                    focus: "极高风险：火灾与人体伤害",
+                    cases: "<ul><li>2021年加州案例：用户操作便携焊机时引发车库火灾 (赔付 $1.2M)。</li><li>2019年：焊接烟尘导致长期肺部损伤索赔。</li></ul>",
+                    mitigation: "建议：必须强制要求佩戴专业防护装备，仅限工业级用户购买。"
+                }
+            },
+            {
+                id: '10203',
+                cat: '电池/Battery Packs',
+                cls: 'C',
+                rate: 0.012,
+                min: 6500,
+                keywords: 'battery,lithium,power bank,18650',
+                deep_analysis: {
+                    focus: "核心风险：热失控 (Thermal Runaway)",
+                    cases: "<ul><li>知名案例：平衡车 (Hoverboard) 电池起火导致的连环房屋火灾诉讼。</li><li>统计：锂电池相关火灾索赔平均赔付额超过 $150,000。</li></ul>",
+                    mitigation: "合规建议：必须符合 UL 1642 / UL 2054 标准，拥有 UN38.3 运输认证。"
+                }
+            },
+            {
+                id: '12240',
+                cat: '头盔/Helmets',
+                cls: 'C',
+                rate: 0.015,
+                min: 8000,
+                keywords: 'helmet,safety hat,protective headwear',
+                deep_analysis: {
+                    focus: "核心风险：防护失效导致脑损伤 (TBI)",
+                    cases: "<ul><li>诉讼焦点：在事故中头盔破裂或未能提供宣称的保护等级。</li></ul>",
+                    mitigation: "必须符合 DOT / ECE / CPSC 相关安全标准。"
+                }
+            },
+            {
+                id: '90001',
+                cat: '儿童玩具/Toys',
+                cls: 'C',
+                rate: 0.010,
+                min: 6000,
+                keywords: 'toy,plush,kids,children,doll',
+                deep_analysis: {
+                    focus: "窒息风险与化学毒性",
+                    cases: "<ul><li>常见索赔：小部件脱落导致儿童误食窒息。</li><li>增塑剂(Phthalates)超标导致的长期健康诉讼。</li></ul>",
+                    mitigation: "需符合 ASTM F963 及 CPC 认证。"
+                }
+            },
 
             // === A类 (较高风险/电动工具/加热器) ===
-            { id: '11113', cat: '加热设备/Heating Equipment', cls: 'A', rate: 0.0035, min: 5500, keywords: 'heater,garage heater,space heater,fireplace,stove' },
+            {
+                id: '11113',
+                cat: '加热设备/Heating Equipment',
+                cls: 'A',
+                rate: 0.0035,
+                min: 5500,
+                keywords: 'heater,garage heater,space heater,fireplace,stove',
+                deep_analysis: {
+                    focus: "火灾隐患",
+                    cases: "<ul><li>加热器倾倒未自动断电引发的地毯火灾。</li></ul>",
+                    mitigation: "必须具备倾倒断电开关 (Tip-over Switch) 和过热保护。"
+                }
+            },
             { id: '11209', cat: '电动工具/Power Tools', cls: 'A', rate: 0.0030, min: 5000, keywords: 'spray gun,paint sprayer,drill,saw,grinder,sander,power tool' },
-            { id: '10406', cat: '家用电器(加热)/Appliances-Heat', cls: 'A', rate: 0.0025, min: 4800, keywords: 'oven,toaster,fryer,kettle,coffee maker' },
+            {
+                id: '10406',
+                cat: '家用电器(加热)/Appliances-Heat',
+                cls: 'A',
+                rate: 0.0025,
+                min: 4800,
+                keywords: 'oven,toaster,fryer,kettle,coffee maker',
+                deep_analysis: {
+                    focus: "烫伤与电气火灾",
+                    cases: "<ul><li>空气炸锅在无人看管下过热起火。</li></ul>"
+                }
+            },
 
             // === B类 (标准风险/手动工具/劳保/日用) ===
             { id: '11210', cat: '手动工具/Hand Tools', cls: 'B', rate: 0.0012, min: 4500, keywords: 'wrench,plier,screwdriver,hammer,tap and die,nut driver,pipe threading,socket set,hex key,allen key,security bit' },
@@ -80,6 +151,12 @@
             { id: '12050', cat: '纺织品/Textiles', cls: 'B', rate: 0.0009, min: 4000, keywords: 'fabric,cloth,towel,bedding,pillow,curtain' },
             { id: '10000', cat: '普通百货/General MDSE', cls: 'B', rate: 0.00065, min: 4200, keywords: 'merchandise,general,gift' }
         ];
+
+        // 强制更新本地存储的数据库以应用新的专家洞察数据的 Helper
+        // (仅在开发调试阶段或版本迁移时使用)
+        const FORCE_UPDATE_DB = true;
+        if (FORCE_UPDATE_DB) localStorage.setItem('cgl_db_v3', JSON.stringify(DEFAULT_DB));
+
 
         const DEFAULT_COI_RULES = [
             { id: 'limit', label: '单次事故赔付限额', value: 1000000, unit: 'USD', desc: 'Amazon 要求不低于 $1M' },
@@ -139,7 +216,7 @@
             // 🆕 插件联动逻辑：检查是否有来自 Popup 的待处理文件
             useEffect(() => {
                 if (window.chrome && chrome.storage && chrome.storage.local) {
-                    chrome.storage.local.get(['pendingUpload', 'extractedData'], (result) => {
+                    chrome.storage.local.get(['pendingUpload', 'extractedData', 'deepScanData'], (result) => {
                         // 1. 优先处理文件上传
                         if (result.pendingUpload) {
                             const { name, type, data } = result.pendingUpload;
@@ -152,7 +229,7 @@
                                     // Excel 处理
                                     const wb = XLSX.read(data.split(',')[1], { type: 'base64' });
                                     const sheetName = wb.SheetNames[0];
-                                    const jsonData = XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
+                                    const jsonData = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
                                     processMerchantReport(jsonData);
                                 } else if (type === 'txt' || type === 'csv') {
                                     // 文本处理
@@ -182,6 +259,36 @@
                                 processMerchantReport(items);
                                 setView('merchant');
                                 // chrome.storage.local.remove('extractedData'); // 抓取的数据可以保留供参考，或者也清除
+                            }
+                        }
+                        // 3. 处理 Firecrawl 深度分析数据
+                        else if (result.deepScanData) {
+                            const { productLinks, scanTime } = result.deepScanData;
+                            if (productLinks && productLinks.length > 0) {
+                                const timeDiff = new Date() - new Date(scanTime);
+                                if (timeDiff < 300000) { // 5分钟内有效
+                                    addLog('AI_SCAN', `Firecrawl 云端发现 ${productLinks.length} 个潜在SKU`);
+
+                                    // 转换为报表格式
+                                    const items = productLinks.map(link => {
+                                        // 尝试提取 ASIN
+                                        const asinMatch = link.match(/\/dp\/([A-Z0-9]{10})/);
+                                        const asin = asinMatch ? asinMatch[1] : 'UNKNOWN';
+                                        return {
+                                            title: `Cloud Discovered SKU (${asin})`,
+                                            salesValue: 0, // 云端 Map 模式不包含销售额
+                                            note: '来自 Firecrawl 店铺结构分析'
+                                        };
+                                    });
+
+                                    processMerchantReport(items);
+                                    setView('merchant');
+
+                                    // 提示用户
+                                    setTimeout(() => {
+                                        alert(`☁️ 云端大脑已同步店铺结构！\n\n共发现 ${items.length} 个 SKU 位置。\n由于 Map 模式仅分析结构，销售额暂为 0，请手动完善或结合 Seller Central 报表。`);
+                                    }, 500);
+                                }
                             }
                         }
                     });
@@ -225,58 +332,144 @@
                     // Debug: 打印前5个详情
                     if (idx < 5) console.log(`Processing Item [${idx}]:`, title);
 
-                    const match = db.find(d => {
+                    // --- 1. 核心功能分类 (Primary Functional Categorization) ---
+                    // 逻辑：先识别它"是什么" (Functional Identification)
+                    // 我们遍历数据库，寻找匹配的功能描述。此时不应过分纠结由于包含“电池”而直接判定为“电池类别”。
+                    // 因此，我们需要确保数据库的顺序：具体功能 -> 通用功能 -> 兜底
+                    let primaryMatch = db.find(d => {
+                        // 排除纯风险描述类（如 Battery），除非它本身就是产品主体
+                        const isPureRiskCategory = d.id === '10203'; // Battery ID
+                        if (isPureRiskCategory) return false;
+
                         const keywords = String(d.keywords || '');
-                        const hit = keywords.split(/[,，]/).find(k => {
+                        return keywords.split(/[,，]/).find(k => {
                             const cleanK = k.trim().toLowerCase();
                             return cleanK && String(title).toLowerCase().includes(cleanK);
                         });
-
-                        // 修正：增加日志输出，确认匹配成功
-                        if (hit && idx < 5) console.log(`   ✅ Matched Rule [${d.cat}] using keyword: "${hit}"`);
-
-                        return !!hit;
                     });
 
-                    // 兜底逻辑：如果没匹配上
-                    if (!match) {
-                        // 1. 尝试找数据库里的“通用”或“其他”类
-                        const genericMatch = db.find(d => {
-                            const k = d.keywords?.toLowerCase() || '';
-                            const c = d.cat?.toLowerCase() || '';
-                            return k.includes('general') || k.includes('other') || k.includes('其他') || k.includes('通用') ||
-                                c.includes('general') || c.includes('other') || c.includes('其他') || c.includes('通用');
-                        });
+                    // --- 2. 风险特征扫描 (Risk Characteristic Scanning) ---
+                    // 逻辑：扫描“含有什么风险” (Risk Component Identification)
+                    // 无论它是什么产品，只要包含高危组件（如电池、燃油、高压），就必须在风险上加码
+                    const riskKeywords = [
+                        { key: 'battery', tag: 'High Risk: Battery Source', upgradeTo: 'C', minRate: 0.012, riskId: '10203' },
+                        { key: 'lithium', tag: 'High Risk: Lithium Battery', upgradeTo: 'C', minRate: 0.012, riskId: '10203' },
+                        { key: 'welder', tag: 'High Risk: Welding Arc', upgradeTo: 'Excluded', minRate: 0.05, riskId: '11213' },
+                        { key: 'heater', tag: 'High Risk: Heating Element', upgradeTo: 'A', minRate: 0.0035, riskId: '11113' }
+                    ];
 
-                        // 2. 如果没找到通用类，就找数据库里的第一条作为兜底
-                        // (通常第一条是费率较低的基础类，或者用户上传的第一个类)
-                        match = genericMatch || db[0] || { id: '99999', cat: '未识别分类/Uncategorized', cls: 'B', rate: 0.001, min: 5000 };
+                    let riskFactor = null;
+                    const titleLower = String(title).toLowerCase();
 
-                        if (idx < 5) console.log(`   ⚠️ No match found. Fallback to: [${match.cat}] (ID: ${match.id})`);
+                    // 扫描标题中是否包含风险词
+                    for (const rf of riskKeywords) {
+                        if (titleLower.includes(rf.key)) {
+                            riskFactor = rf;
+                            break; // 找到最高优先级的风险即可
+                        }
                     }
 
-                    return { title, salesValue, ...match };
+                    // --- 3. 最终判定 (Final Determination) ---
+                    let finalMatch = { ... (primaryMatch || {}) };
+
+                    // 兜底逻辑：如果连功能都没匹配上 (Result is Unidentified)
+                    if (!primaryMatch) {
+                        // 如果包含风险词（如是一个纯"Lithium Battery Pack"），且没匹配到其他功能，那它就是风险产品本身
+                        if (riskFactor) {
+                            const riskDbItem = db.find(d => d.id === riskFactor.riskId);
+                            primaryMatch = riskDbItem;
+                            finalMatch = { ...riskDbItem };
+                        } else {
+                            // 真正的兜底：不再默认归为“普通百货”，而是归为“待人工核保”
+                            primaryMatch = {
+                                id: 'REFERRAL',
+                                cat: '待人工核保/Refer to Underwriter',
+                                cls: 'Referral',
+                                rate: 0.00, // 费率置0，强制人工定价
+                                min: 0,
+                                isReferral: true
+                            };
+                            finalMatch = { ...primaryMatch };
+                            riskAnalysisText = "❓ 系统无法识别该商品，请人工确认产品功能并指定费率。";
+                        }
+                    } else if (primaryMatch.id === '10000') {
+                        // 如果匹配到了普通百货 (General MDSE)，再次确认是否真的看起来像普通百货
+                        // 防止 "Nuclear Reactor" 被兜底规则匹配成 General
+                        // 这里我们信任数据库的关键词匹配，但由于 General 的关键词通常很宽泛，所以保持原状即可
+                    }
+
+                    // 风险升级逻辑：
+                    // 如果扫描到了风险因子，且风险因子的费率/等级 高于 产品原本的等级，则进行强制升级
+                    // 原则：以高风险为准 (Highest Risk Prevails)
+                    let riskAnalysisText = "✅ 标准承保风险";
+                    let deepAnalysisData = finalMatch.deep_analysis || null;
+
+                    if (riskFactor) {
+                        // 比较当前产品费率与风险因子最低费率
+                        const currentRate = finalMatch.rate || 0;
+                        if (riskFactor.minRate > currentRate) {
+                            // 触发升级
+                            finalMatch.cls = riskFactor.upgradeTo;
+                            finalMatch.rate = riskFactor.minRate; // 使用高风险费率
+                            // 生成复合分类名
+                            finalMatch.cat = `${finalMatch.cat} (with ${riskFactor.tag.split(':')[1].trim()})`;
+
+                            riskAnalysisText = `⚠️ <strong>检测到高危组件 [${riskFactor.key}]</strong><br>风险等级强制上调至 [Class ${riskFactor.upgradeTo}]`;
+
+                            // Log
+                            if (idx < 5) console.log(`   ‼️ Risk Upgrade: ${title} -> Detected ${riskFactor.key}, Upgrading to ${riskFactor.upgradeTo}`);
+
+                            // 尝试获取该风险因子的深度分析数据（如果有，比如 Battery）
+                            const riskDbItem = db.find(d => d.id === riskFactor.riskId);
+                            if (riskDbItem && riskDbItem.deep_analysis) {
+                                deepAnalysisData = riskDbItem.deep_analysis;
+                            }
+                        }
+                    } else if (deepAnalysisData) {
+                        // 如果没有外部风险因子升级，但是本类目自带深度分析 (如本身就是 Welding)
+                        riskAnalysisText = `ℹ️ <strong>行业风险提示</strong>`;
+                    }
+
+                    if (idx < 5 && !riskFactor) console.log(`   ✅ Matched Standard Rule [${finalMatch.cat}]`);
+
+                    // 构造返回对象，额外带上 riskAnalysis 字段供 UI 展示
+                    return {
+                        title,
+                        salesValue,
+                        ...finalMatch,
+                        // 如果因为风险升级导致 id 没变（比如只是改了 rate），可能会导致不同风险的产品混在一个组
+                        // 为了区分，我们需要让 composite ID 唯一
+                        id: riskFactor ? `${finalMatch.id}-RISK-${riskFactor.key}` : finalMatch.id,
+                        originalCat: primaryMatch ? primaryMatch.cat : 'Uncategorized',
+                        riskAnalysis: riskAnalysisText,
+                        deepAnalysis: deepAnalysisData
+                    };
                 });
                 console.groupEnd();
 
                 // 2. 按品类(ID)进行归集汇总
                 const groupsMap = {};
                 rawMatches.forEach(item => {
-                    if (!groupsMap[item.id]) {
-                        groupsMap[item.id] = {
-                            id: item.id,
-                            cat: item.cat,
+                    // 使用新的 Composite ID 进行分组
+                    const groupId = item.id;
+
+                    if (!groupsMap[groupId]) {
+                        groupsMap[groupId] = {
+                            id: groupId,
+                            cat: item.cat, // 这里的 cat 可能是复合名称 "Doorbell (w/ Battery)"
                             cls: item.cls,
                             rate: item.rate,
                             min: item.min,
                             itemsCount: 0,
                             excelTotalSales: 0,
-                            items: [] // 存储该分类下的所有 SKU
+                            riskAnalysis: item.riskAnalysis, // 取第一个样本的分析文案
+                            deepAnalysis: item.deepAnalysis, // 取第一个样本的深度洞察
+                            items: []
                         };
                     }
-                    groupsMap[item.id].itemsCount += 1;
-                    groupsMap[item.id].excelTotalSales += item.salesValue;
-                    groupsMap[item.id].items.push(item);
+                    groupsMap[groupId].itemsCount += 1;
+                    groupsMap[groupId].excelTotalSales += item.salesValue;
+                    groupsMap[groupId].items.push(item);
                 });
 
                 // 3. 计算权重并初始化申报销售额

@@ -1,17 +1,54 @@
 // Content Script - 注入到亚马逊页面中
 // 监听来自 popup 的消息
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === 'extractData') {
+    if (request.action === 'extract') {
         console.log('🔍 CGL: 开始提取数据...');
-        const extractedData = extractAmazonData();
-        console.log('📊 CGL: 提取结果:', extractedData);
-        sendResponse({ success: true, data: extractedData });
+
+        // 由于 extractAmazonData 现在是 async 的，我们需要这样处理
+        extractAmazonData().then(data => {
+            console.log('✅ CGL: 提取完成', data);
+            sendResponse({ success: true, data: data }); // Ensure success: true is included
+        }).catch(err => {
+            console.error('❌ CGL: 提取出错', err);
+            sendResponse({ success: false, error: err.message }); // Ensure success: false for errors
+        });
+
+        return true; // 必须返回 true 以保持消息通道开启，等待异步响应
     }
-    return true; // 保持消息通道开启
+    // If the action is not 'extract', we don't need to keep the message channel open
+    // as no async response will be sent.
+    return false;
 });
 
 // 提取亚马逊页面数据的核心函数
-function extractAmazonData() {
+// Helper to trigger lazy loading
+async function autoScrollPage() {
+    console.log('🔄 开始自动滚动以加载更多内容...');
+    return new Promise((resolve) => {
+        let totalHeight = 0;
+        const distance = 800;
+        const maxScrolls = 15; // Limit scroll number
+        let scrolls = 0;
+
+        const timer = setInterval(() => {
+            window.scrollBy(0, distance);
+            totalHeight += distance;
+            scrolls++;
+
+            // Intelligent stop: if height doesn't change much or max scrolls reached
+            if (scrolls >= maxScrolls || (document.body.scrollHeight - window.scrollY) < 1000) {
+                clearInterval(timer);
+                window.scrollTo(0, 0); // Back to top
+                setTimeout(resolve, 800); // Wait for React to render
+            }
+        }, 200); // Faster scroll
+    });
+}
+
+async function extractAmazonData() {
+    // 自动滚动加载
+    await autoScrollPage();
+
     const results = [];
     const url = window.location.href;
 
@@ -24,181 +61,177 @@ function extractAmazonData() {
     console.log('📍 页面类型:', { isSeller, isBusinessReport });
 
     // 方案1: 尝试从表格中提取（适用于 Business Reports 页面）
-    const tables = document.querySelectorAll('table');
-    console.log(`📋 找到 ${tables.length} 个表格`);
-
-    tables.forEach((table, tableIndex) => {
-        const rows = table.querySelectorAll('tr');
-        console.log(`  表格 ${tableIndex + 1}: ${rows.length} 行`);
-
-        rows.forEach((row, rowIndex) => {
-            if (rowIndex === 0) return; // 跳过表头
-
-            const cells = row.querySelectorAll('td, th');
-            if (cells.length >= 2) {
-                const cellTexts = Array.from(cells).map(c => c.innerText?.trim());
-
-                // 尝试识别 SKU 和销售额
-                cellTexts.forEach((text, i) => {
-                    // SKU 通常是大写字母+数字组合
-                    if (/^[A-Z0-9]{8,}$/.test(text)) {
-                        const nextCell = cellTexts[i + 1];
-                        const sales = nextCell ? parseFloat(nextCell.replace(/[^0-9.]/g, '')) : 0;
-
-                        if (sales > 0 || true) { // 即使销售额为0也记录
+    if (isSeller || isBusinessReport) {
+        const tables = document.querySelectorAll('table');
+        tables.forEach((table, tableIndex) => {
+            const rows = table.querySelectorAll('tr');
+            rows.forEach((row, rowIndex) => {
+                if (rowIndex === 0) return;
+                const cells = row.querySelectorAll('td, th');
+                if (cells.length >= 2) {
+                    const cellTexts = Array.from(cells).map(c => c.innerText?.trim());
+                    cellTexts.forEach((text, i) => {
+                        if (/^[A-Z0-9]{8,}$/.test(text)) { // SKU 格式
+                            const nextCell = cellTexts[i + 1];
+                            const sales = nextCell ? parseFloat(nextCell.replace(/[^0-9.]/g, '')) : 0;
                             results.push({
                                 sku: text,
                                 sales: sales,
-                                source: `table-${tableIndex + 1}-row-${rowIndex + 1}`
+                                source: `seller - report - table`
                             });
                         }
-                    }
+                    });
+                }
+            });
+        });
+    }
+
+    // 方案2: 亚马逊搜索结果页 (Search Results) - 专用提取器
+    // 这是最结构化的数据源，优先处理
+    const searchItems = document.querySelectorAll('div[data-component-type="s-search-result"], div[data-asin]');
+    if (searchItems.length > 0) {
+        console.log(`🔍 检测到搜索结果列表，共 ${searchItems.length} 个商品`);
+        searchItems.forEach(item => {
+            const asin = item.getAttribute('data-asin');
+            if (asin && asin.length > 5) {
+                // 提取标题
+                const titleEl = item.querySelector('h2 a span') || item.querySelector('h2') || item.querySelector('.a-text-normal');
+                const title = titleEl ? titleEl.innerText.trim() : '未知商品';
+
+                // 提取价格
+                const priceEl = item.querySelector('.a-price .a-offscreen');
+                const price = priceEl ? parseFloat(priceEl.innerText.replace(/[^0-9.]/g, '')) : 0;
+
+                results.push({
+                    sku: asin,
+                    name: title,
+                    sales: 0,
+                    price: price,
+                    source: 'search-result',
+                    note: '搜索结果页提取'
                 });
             }
         });
-    });
-
-    // 方案2: 从页面文本中提取 ASIN/SKU 模式
-    if (results.length === 0) {
-        console.log('⚠️ 表格中未找到数据，尝试文本提取...');
-
-        const bodyText = document.body.innerText;
-        const asinPattern = /\b([B][A-Z0-9]{9})\b/g;
-        const asinMatches = [...new Set(bodyText.match(asinPattern) || [])];
-
-        console.log(`🔤 找到 ${asinMatches.length} 个可能的 ASIN`);
-
-        asinMatches.slice(0, 20).forEach(asin => {
-            results.push({
-                sku: asin,
-                sales: 0,
-                source: 'text-pattern',
-                note: '从页面文本提取，需手动输入销售额'
-            });
-        });
     }
 
-    // 方案3: 如果是商品详情页，提取当前商品的 ASIN
-    if (results.length === 0 && url.includes('/dp/')) {
-        const asinMatch = url.match(/\/dp\/([A-Z0-9]{10})/);
-        if (asinMatch) {
-            console.log('📦 检测到商品详情页，ASIN:', asinMatch[1]);
-            // 尝试获取标题
-            const title = document.getElementById('productTitle')?.innerText.trim() || '当前商品';
-            const priceEl = document.querySelector('.a-price .a-offscreen');
-            const price = priceEl ? parseFloat(priceEl.innerText.replace(/[^0-9.]/g, '')) : 0;
+    // 方案3: 品牌旗舰店 (Storefront) - 深度链接扫描器
+    // Storefront 通常是 React 渲染，没有 data-asin 属性，需扫描链接
+    if (url.includes('/stores/') || document.querySelector('.listings-layout-grid')) {
+        console.log('🛍️ 检测到品牌旗舰店 (Storefront) ...');
+        // 查找所有指向产品的链接
+        const productLinks = document.querySelectorAll('a[href*="/dp/"], a[href*="/gp/product/"]');
 
-            results.push({
-                sku: asinMatch[1],
-                name: title,
-                sales: 0,
-                price: price,
-                source: 'product-page',
-                note: '当前商品页面'
-            });
-        }
-    }
+        productLinks.forEach(link => {
+            // 提取 ASIN
+            const match = link.href.match(/\/dp\/([A-Z0-9]{10})/);
+            if (!match) return;
+            const asin = match[1];
 
-    // 方案4: 亚马逊前台页面 (店铺首页、搜索结果页、品牌旗舰店) - 增强版 V2
-    if (results.length === 0) {
-        console.log('🛍️ 尝试抓取前台/店铺页面数据 (增强模式)...');
+            // 寻找父级容器以获取上下文信息 (Img, Title, Price)
+            // 向上遍历3层通常能找到卡片容器
+            let card = link.parentElement;
+            let title = '';
+            let price = 0;
 
-        // --- 1. 抓取分类 (导航) ---
-        const categories = new Set();
-        // 针对 Storefront 的特殊导航结构
-        const navLinks = document.querySelectorAll('ul[class*="navigation"] li a, div[data-testid="navigation-item"] a, .listings-menu a');
+            for (let k = 0; k < 4; k++) {
+                if (!card) break;
 
-        navLinks.forEach(link => {
-            const text = link.innerText.trim();
-            // 严格过滤：排除短词、全大写通用词、由特殊字符组成的词
-            if (text.length > 3 && text.length < 25 &&
-                !/^(HOME|CART|SEARCH|MENU|OPT|SHIFT|ALT|CTRL|TAB)$/i.test(text) &&
-                !/[{}[\]<>\\]/.test(text)) {
-                categories.add(text);
+                // 尝试找标题
+                if (!title) {
+                    const t = card.innerText.trim();
+                    if (t.length > 10 && t.length < 200) title = t.split('\n')[0];
+                }
+
+                // 尝试找价格
+                if (price === 0) {
+                    const pMatch = card.innerText.match(/[\$£€¥]\d+(\.\d{2})?/);
+                    if (pMatch) price = parseFloat(pMatch[0].replace(/[^0-9.]/g, ''));
+                }
+
+                card = card.parentElement;
+            }
+
+            // 避免重复和无效项
+            if (!results.some(r => r.sku === asin)) {
+                results.push({
+                    sku: asin,
+                    name: title || 'Storefront Item',
+                    sales: 0,
+                    price: price,
+                    source: 'storefront-scan',
+                    note: '品牌店链接扫描'
+                });
             }
         });
+    }
 
-        // 如果上面没抓到，尝试抓取页面所有的 H2 标题作为分类参考
-        if (categories.size === 0) {
-            document.querySelectorAll('h2').forEach(h => {
-                if (h.innerText.length < 20) categories.add(h.innerText.trim());
-            });
-        }
-
-        const detectedCategories = [...categories].slice(0, 5).join(' / ');
-        console.log('📂 检测到可能的分类:', detectedCategories || "未识别到明确分类");
-
-
-        // --- 2. 抓取商品 (通用视觉识别法) ---
-        // 策略：寻找所有包含“价格”特征的容器，然后向上查找其父容器作为商品卡片
-
+    // 方案4: 通用视觉识别 (兜底)
+    // 如果上述特定提取器都没抓到，使用通用算法
+    if (results.length === 0) {
+        console.log('⚠️ 未匹配特定页面模式，启用通用视觉扫描...');
         const pricePattern = /[\$£€¥]\d+([.,]\d{2})?|\d+([.,]\d{2})?\s*[\$£€¥]/;
         const allElements = document.body.getElementsByTagName('*');
 
+        // ... (保留原有的视觉识别逻辑作为最后防线) ...
+        // 省略部分重复代码，直接复用原逻辑思路但简化
         for (let i = 0; i < allElements.length; i++) {
             const el = allElements[i];
-            // 只检查文本节点，且包含价格符号
             if (el.children.length === 0 && pricePattern.test(el.innerText)) {
-                // 找到一个价格标签！
-                // 向上找 3-5 层父级，判断是否像一个“商品卡片”
                 let card = el.parentElement;
-                let foundCard = false;
-
-                // 向上遍历，寻找包含图片和标题的容器
                 for (let k = 0; k < 5; k++) {
                     if (!card) break;
                     const hasImg = card.querySelector('img');
-                    const hasTitle = card.innerText.length > 20; // 整个卡片文字量应该足够多
-
-                    if (hasImg && hasTitle) {
-                        // 这是一个合格的商品卡片
-                        const rawText = card.innerText;
-                        const lines = rawText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-
-                        // 提取标题：通常是除了价格之外最长的一行文字
-                        let title = lines.sort((a, b) => b.length - a.length)[0];
-
-                        // 提取价格：从当前价格标签提取
-                        let priceVal = parseFloat(el.innerText.replace(/[^0-9.]/g, ''));
-
-                        // 提取 ASIN (尝试从链接)
-                        let asin = null;
+                    if (hasImg && card.innerText.length > 20) {
                         const link = card.querySelector('a[href*="/dp/"]');
                         if (link) {
                             const m = link.href.match(/\/dp\/([A-Z0-9]{10})/);
-                            if (m) asin = m[1];
+                            if (m && !results.some(r => r.sku === m[1])) {
+                                results.push({
+                                    sku: m[1],
+                                    name: card.innerText.split('\n')[0].substring(0, 50),
+                                    sales: 0,
+                                    price: parseFloat(el.innerText.replace(/[^0-9.]/g, '')),
+                                    source: 'visual-fallback'
+                                });
+                            }
                         }
-
-                        // 去重添加
-                        if (title && title.length > 5 && !results.some(r => r.name === title)) {
-                            results.push({
-                                sku: asin || `DETECTED-${results.length + 1}`,
-                                name: title,
-                                sales: 0,
-                                price: priceVal,
-                                source: 'visual-scan',
-                                category_hint: detectedCategories,
-                                note: '视觉识别抓取'
-                            });
-                        }
-                        foundCard = true;
-                        break; // 找到父级卡片后，停止向上
+                        break;
                     }
                     card = card.parentElement;
                 }
             }
-            if (results.length > 50) break; // 限制抓取数量
+            if (results.length > 60) break;
         }
     }
 
     console.log(`✅ 最终提取到 ${results.length} 条数据`);
 
+    // 去重与清洗 (Deduplication & Cleaning)
+    const uniqueResults = [];
+    const seen = new Set();
+    const invalidTitles = /^(quick look|storefront item|shop now|see options|add to cart|currently unavailable)$/i;
+
+    results.forEach(r => {
+        // 清洗标题
+        r.name = r.name ? r.name.trim() : '';
+
+        // 过滤无效数据
+        if (!r.name || r.name.length < 3 || invalidTitles.test(r.name)) {
+            return;
+        }
+
+        if (!seen.has(r.sku)) {
+            seen.add(r.sku);
+            uniqueResults.push(r);
+        }
+    });
+
     return {
         url: window.location.href,
         timestamp: new Date().toISOString(),
         pageType: isSeller ? 'seller-central' : 'customer-facing',
-        itemCount: results.length,
-        items: results.slice(0, 50) // 最多返回50条
+        itemCount: uniqueResults.length,
+        items: uniqueResults.slice(0, 100)
     };
 }
 

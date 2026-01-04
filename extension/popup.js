@@ -12,48 +12,84 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // 🆕 抓取当前页面数据
+    // 🆕 抓取当前页面数据
     document.getElementById('extractBtn').addEventListener('click', function () {
         const btn = this;
         const originalText = btn.textContent;
-        btn.textContent = '抓取中...';
-        btn.disabled = true;
+        const loadingText = '⏳ 正在抓取...';
 
-        chrome.runtime.sendMessage({ action: 'getCurrentTabData' }, (response) => {
+        if (btn.textContent === loadingText) return; // Prevent double click
+
+        btn.textContent = loadingText;
+        btn.disabled = true;
+        document.getElementById('extractResult').style.display = 'none';
+
+        // 1. 获取当前活跃的 Tab
+        chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+            if (!tabs || tabs.length === 0) {
+                alert('无法获取当前页面信息');
+                resetBtn();
+                return;
+            }
+
+            const activeTab = tabs[0];
+
+            // 2. 发送消息给 Content Script
+            // 注意：必须使用 tabs.sendMessage 才能发送给特定页面的 content.js
+            chrome.tabs.sendMessage(activeTab.id, { action: 'extract' }, (response) => {
+                // 检查 runtime.lastError (如 content script 未加载)
+                if (chrome.runtime.lastError) {
+                    console.error("Communication Error:", chrome.runtime.lastError);
+                    alert('连接由于页面刷新而断开，或者插件未在当前页面加载。\n\n请尝试刷新亚马逊页面后再点击。');
+                    resetBtn();
+                    return;
+                }
+
+                resetBtn();
+
+                if (response && response.success && response.data) {
+                    const data = response.data;
+
+                    if (data.itemCount > 0) {
+                        // 显示抓取结果
+                        document.getElementById('extractResult').style.display = 'block';
+                        document.getElementById('extractCount').textContent = data.itemCount;
+
+                        // 计算总销售额
+                        const totalSales = data.items.reduce((sum, item) => sum + (item.sales || 0), 0);
+                        document.getElementById('extractSales').textContent =
+                            '$' + new Intl.NumberFormat('en-US').format(totalSales.toFixed(2));
+
+                        // 保存数据到 storage，供完整版工具使用
+                        chrome.storage.local.set({
+                            extractedData: data,
+                            extractedAt: new Date().toISOString()
+                        });
+
+                        // 自动变更按钮状态
+                        document.getElementById('fullToolBtn').textContent = '打开完整版工具 (数据已就绪)';
+                        document.getElementById('fullToolBtn').style.background = 'linear-gradient(90deg, #48bb78 0%, #38a169 100%)';
+                        document.getElementById('fullToolBtn').style.color = 'white';
+                        document.getElementById('fullToolBtn').style.fontWeight = 'bold';
+                        document.getElementById('fullToolBtn').style.boxShadow = '0 4px 6px rgba(72, 187, 120, 0.3)';
+
+                        // 简短提示
+                        // alert(`✅ 成功抓取 ${data.itemCount} 条数据！\n\n点击"打开完整版工具"即可生成报告。`);
+                    } else {
+                        // 没抓到数据，但在 Search/Store 页面可能是正常的 (如果还没加载完)，但如果是详情页...
+                        alert('⚠️ 未能提取到 SKU 数据。\n\n请确认：\n1. 您在亚马逊【搜索结果页】或【品牌旗舰店】\n2. 页面已加载完毕\n\n建议尝试刷新页面重试。');
+                    }
+                } else {
+                    const errorMsg = response?.error || '未知错误';
+                    alert(`❌ 抓取失败: ${errorMsg}`);
+                }
+            });
+        });
+
+        function resetBtn() {
             btn.textContent = originalText;
             btn.disabled = false;
-
-            if (response && response.success && response.data) {
-                const data = response.data;
-
-                if (data.itemCount > 0) {
-                    // 显示抓取结果
-                    document.getElementById('extractResult').style.display = 'block';
-                    document.getElementById('extractCount').textContent = data.itemCount;
-
-                    // 计算总销售额
-                    const totalSales = data.items.reduce((sum, item) => sum + (item.sales || 0), 0);
-                    document.getElementById('extractSales').textContent =
-                        '$' + new Intl.NumberFormat('en-US').format(totalSales.toFixed(2));
-
-                    // 保存数据到 storage，供完整版工具使用
-                    chrome.storage.local.set({
-                        extractedData: data,
-                        extractedAt: new Date().toISOString()
-                    });
-
-                    // 自动变更按钮状态
-                    document.getElementById('fullToolBtn').textContent = '打开完整版工具 (已同步数据)';
-                    document.getElementById('fullToolBtn').style.background = '#48bb78';
-                    document.getElementById('fullToolBtn').style.color = 'white';
-
-                    alert(`✅ 成功抓取 ${data.itemCount} 条数据！\n数据已同步，点击下方按钮打开完整版工具进行分析。`);
-                } else {
-                    alert('⚠️ 未在当前页面检测到销售数据\n\n请确保您在亚马逊卖家中心的业务报告页面。');
-                }
-            } else {
-                alert(response?.error || '抓取失败，请在亚马逊卖家中心页面使用此功能');
-            }
-        });
+        }
     });
 
     // 文件选择事件 - 支持多种格式
