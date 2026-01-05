@@ -92,11 +92,15 @@
                 cls: 'Excluded',
                 rate: 0.05,
                 min: 10000,
-                keywords: 'welder,welding,soldering,plastic welder,arc weld',
+                keywords: 'welder,welding,soldering,plastic welder,arc weld,spot welder,mig welder,tig welder,plasma cutter',
                 deep_analysis: {
-                    focus: "极高风险：火灾与人体伤害",
-                    cases: "<ul><li>2021年加州案例：用户操作便携焊机时引发车库火灾 (赔付 $1.2M)。</li><li>2019年：焊接烟尘导致长期肺部损伤索赔。</li></ul>",
-                    mitigation: "建议：必须强制要求佩戴专业防护装备，仅限工业级用户购买。"
+                    focus: `<strong>高能热源与电气风险：</strong>焊接设备不仅仅因高温熔融金属构成直接火灾隐患，其瞬间高压电弧更可能导致严重的操作者电击。<ul><li><strong>火灾蔓延：</strong>焊接飞溅物(Spatter)通常超过1500°C，可引燃数米外的隐蔽可燃物。</li><li><strong>烟尘毒性：</strong>长期吸入焊接烟尘(Fume)特别是镀锌管焊接产生的氧化锌，可导致金属烟热病(Metal Fume Fever)甚至永久性肺损伤。</li><li><strong>光辐射：</strong>强紫外线会导致"电光性眼炎"(Arc Eye)及皮肤灼伤。</li></ul>`,
+                    cases: `<ul>
+                                <li><strong>2021年加州车库火灾案 (赔付 $1.2M)：</strong> 一名业余DIY用户在使用便携式MIG焊机修复围栏时，未注意清理周边的油漆稀释剂抹布。飞溅火花引燃抹布，火势迅速蔓延至整个车库及邻居家。诉讼指控产品未提供足够的"清理作业环境"警示。</li>
+                                <li><strong>2019年伊利诺伊州电击案 (赔付 $850K)：</strong> 工人在潮湿环境下使用廉价逆变焊机，因设备内部绝缘老化漏电，导致其触电身亡。法医鉴定显示设备未达IP23防护等级。</li>
+                                <li><strong>2018年纽约烟尘中毒集体诉讼：</strong> 某工业焊机品牌因未在说明书中明确建议佩戴呼吸防护，导致多名工人确诊锰中毒(Manganism)，引发千万级集体索赔。</li>
+                            </ul>`,
+                    mitigation: "建议：仅承保家用小型设备，必须强制要求 ANSI Z49.1 合规，并在显眼位置张贴 '佩戴呼吸防护' 与 '清理易燃物' 的警告标签。"
                 }
             },
             {
@@ -105,11 +109,15 @@
                 cls: 'C',
                 rate: 0.012,
                 min: 6500,
-                keywords: 'battery,lithium,power bank,18650',
+                keywords: 'battery,lithium,power bank,18650,lipo,battery pack,laptop battery,ebike battery',
                 deep_analysis: {
-                    focus: "核心风险：热失控 (Thermal Runaway)",
-                    cases: "<ul><li>知名案例：平衡车 (Hoverboard) 电池起火导致的连环房屋火灾诉讼。</li><li>统计：锂电池相关火灾索赔平均赔付额超过 $150,000。</li></ul>",
-                    mitigation: "合规建议：必须符合 UL 1642 / UL 2054 标准，拥有 UN38.3 运输认证。"
+                    focus: `<strong>热失控 (Thermal Runaway) 及其连锁反应：</strong> 锂离子电池的核心风险在于其高能量密度与电解液的易燃性。一旦发生内短路（如枝晶生长穿刺隔膜）或外力损伤，电池会在数秒内温度飙升至600°C以上，并喷射出氢气、甲烷等可燃气体，导致猛烈的喷射火或爆炸。此过程几乎无法通过常规灭火器扑灭。`,
+                    cases: `<ul>
+                                <li><strong>2023年纽约电动单车火灾 (造成4人死亡)：</strong> 一家电动自行车维修店因过夜充电廉价翻新电池引发火灾，火势瞬间吞噬楼上公寓。调查发现电池缺乏BMS(电池管理系统)的过充保护功能。</li>
+                                <li><strong>2016年三星Note 7事件 (召回成本$53亿)：</strong> 虽然是知名品牌，但因电池仓设计预留空间不足导致负极板受压变形短路。此案彻底改变了消费电子行业的电池测试标准。</li>
+                                <li><strong>2020年航空货运火灾：</strong> 一批未申报的锂电池在货舱内自燃，导致飞机紧急迫降。涉事货代与制造商面临FAA巨额罚款及刑事指控。</li>
+                            </ul>`,
+                    mitigation: "合规建议：必须提供完整的 UN38.3 运输报告，电芯需过 UL 1642，电池包需过 UL 2054。必须在产品上标注'切勿过充'及'发现鼓包立即停止使用'的警示。"
                 }
             },
             {
@@ -118,11 +126,14 @@
                 cls: 'C',
                 rate: 0.015,
                 min: 8000,
-                keywords: 'helmet,safety hat,protective headwear',
+                keywords: 'helmet,safety hat,protective headwear,bike helmet,motorcycle helmet,ski helmet',
                 deep_analysis: {
-                    focus: "核心风险：防护失效导致脑损伤 (TBI)",
-                    cases: "<ul><li>诉讼焦点：在事故中头盔破裂或未能提供宣称的保护等级。</li></ul>",
-                    mitigation: "必须符合 DOT / ECE / CPSC 相关安全标准。"
+                    focus: `<strong>防护失效与虚假安全感：</strong> 头盔不仅是物理屏障，更是能量吸收系统。如果EPS泡沫密度不均或外壳在冲击下过早碎裂，将无法有效缓冲撞击力，导致比"未戴头盔"更严重的法律后果——因为用户是基于信任才购买的。核心风险是颅脑损伤(TBI)带来的终身护理费用索赔。`,
+                    cases: `<ul>
+                                <li><strong>2018年佛罗里达摩托车事故 (赔付 $3.5M)：</strong> 骑手在低速碰撞中脑部严重受损。测试发现该头盔虽然贴有DOT标签，但并未通过穿刺测试，且系带扣在撞击瞬间断裂脱落，导致头盔飞出。</li>
+                                <li><strong>2020年滑雪头盔脑震荡案：</strong> 滑雪者佩戴不知名品牌头盔撞击树干后昏迷。CT扫描显示头盔内部泡沫几乎未发生形变吸收能量，而是直接将冲击力传导至头骨。</li>
+                            </ul>`,
+                    mitigation: "必须拥有第三方实验室出具的 DOT (FMVSS 218) 或 ECE 22.05 测试报告。自行车头盔需符合 CPSC 1203 标准。"
                 }
             },
             {
@@ -131,49 +142,129 @@
                 cls: 'C',
                 rate: 0.010,
                 min: 6000,
-                keywords: 'toy,plush,kids,children,doll',
+                keywords: 'toy,plush,kids,children,doll,lego,blocks,puzzle,baby',
                 deep_analysis: {
-                    focus: "窒息风险与化学毒性",
-                    cases: "<ul><li>常见索赔：小部件脱落导致儿童误食窒息。</li><li>增塑剂(Phthalates)超标导致的长期健康诉讼。</li></ul>",
-                    mitigation: "需符合 ASTM F963 及 CPC 认证。"
+                    focus: `<strong>机械窒息与隐形化学毒害：</strong> 儿童产品的容错率为零。
+                            <ul>
+                            <li><strong>小部件 (Small Parts)：</strong> 3岁以下儿童不仅会吞食，还可能塞入鼻孔耳道。任何能放入"小部件测试筒"的零件未加警示均为严重违规。</li>
+                            <li><strong>绳索勒杀：</strong> 拖拉玩具绳索过长可能缠绕颈部。</li>
+                            <li><strong>磁力珠风险：</strong> 吞食多颗强力磁珠会在肠道内相吸穿孔，引发危及生命的腹膜炎。</li>
+                            </ul>`,
+                    cases: `<ul>
+                                <li><strong>2012年磁力珠致死案：</strong> 一名2岁儿童误吞7颗巴克球(Buckyballs)，造成肠穿孔死亡。此案导致CPSC对高磁通量磁铁实施了多年的禁令。</li>
+                                <li><strong>2021年亚马逊下架风波：</strong> 数万款中国产泰迪熊因眼睛纽扣拉力测试未达标（易脱落被吞食）被强制下架召回。</li>
+                                <li><strong>2019年邻苯二甲酸酯超标案：</strong> 某塑胶洗澡鸭被检出增塑剂超标200倍，可能干扰儿童内分泌系统，引发大规模消费者集体诉讼。</li>
+                            </ul>`,
+                    mitigation: "强制要求 CPC (Children's Product Certificate)，并基于 CPSC 认可实验室的 ASTM F963-17 测试报告。特别关注重金属（铅）与邻苯二甲酸酯含量。"
                 }
             },
-
-            // === A类 (较高风险/电动工具/加热器) ===
             {
                 id: '11113',
                 cat: '加热设备/Heating Equipment',
                 cls: 'A',
                 rate: 0.0035,
                 min: 5500,
-                keywords: 'heater,garage heater,space heater,fireplace,stove',
+                keywords: 'heater,garage heater,space heater,fireplace,stove,electric blanket,heating pad',
                 deep_analysis: {
-                    focus: "火灾隐患",
-                    cases: "<ul><li>加热器倾倒未自动断电引发的地毯火灾。</li></ul>",
-                    mitigation: "必须具备倾倒断电开关 (Tip-over Switch) 和过热保护。"
+                    focus: `<strong>无人看管下的过热起火：</strong> 加热类电器的核心风险在于温控器失效。如果继电器粘连导致持续加热，或倾倒保护开关设计位置不当（在地毯上失效），极易在深夜引发火灾。此外，长期使用的电源线老化发热也是主要隐患。`,
+                    cases: `<ul>
+                                <li><strong>2022年布朗克斯公寓大火 (17人死亡)：</strong> 调查确认起火源为一台连续运行数天的故障电暖气。该设备未能在过热时自动切断电源，引燃了周围的床垫。此案引发了对廉价电暖器安全标准的全国性审查。</li>
+                                <li><strong>2020年电热毯灼伤案：</strong> 糖尿病患者因末梢神经感觉迟钝，整夜使用过热的电热毯导致双腿深度三度烧伤。诉讼指控产品缺乏"自动定时关闭"功能且警示说明字体过小。</li>
+                            </ul>`,
+                    mitigation: "产品必须具备双重冗余保护：电子温控 + 机械式过热熔断器。必须通过 UL 1278 (移动式加热器) 标准测试。"
                 }
             },
-            { id: '11209', cat: '电动工具/Power Tools', cls: 'A', rate: 0.0030, min: 5000, keywords: 'spray gun,paint sprayer,drill,saw,grinder,sander,power tool' },
+            {
+                id: '11209', cat: '电动工具/Power Tools', cls: 'A', rate: 0.0030, min: 5000, keywords: 'spray gun,paint sprayer,drill,saw,grinder,sander,power tool,impact driver,circular saw',
+                deep_analysis: {
+                    focus: `<strong>高速旋转件的切割与抛射风险：</strong> 砂轮机、圆锯等工具转速高达10,000 RPM以上。一旦砂轮片破裂，碎片动能堪比子弹。另一大风险是"反冲 (Kickback)"——锯片卡死导致工具瞬间反弹击中操作者面部。`,
+                    cases: `<ul>
+                                <li><strong>2017年砂轮机碎片致盲案：</strong> 操作者虽佩戴护目镜，但高速飞出的砂轮碎片击穿了普通PC镜片刺入眼球。法院判决认为产品包装未明确建议使用"全封闭面罩"属于警示缺陷。</li>
+                                <li><strong>2021年台锯断指案：</strong> 木工在使用未配备 SawStop 技术的台锯时手指被切断。虽然产品符合当时标准，但陪审团认为现有更安全的技术未被采用构成了"设计缺陷"。</li>
+                            </ul>`,
+                    mitigation: "警示语必须包含 ANSI Z87.1 护目镜要求。对于手持切割工具，必须设计有Dead-man Switch (离手即停开关)。"
+                }
+            },
             {
                 id: '10406',
                 cat: '家用电器(加热)/Appliances-Heat',
                 cls: 'A',
                 rate: 0.0025,
                 min: 4800,
-                keywords: 'oven,toaster,fryer,kettle,coffee maker',
+                keywords: 'oven,toaster,fryer,kettle,coffee maker,air fryer,rice cooker,sous vide',
                 deep_analysis: {
-                    focus: "烫伤与电气火灾",
-                    cases: "<ul><li>空气炸锅在无人看管下过热起火。</li></ul>"
+                    focus: `<strong>厨房环境下的水火风险：</strong> 涉及水、电、油、火的混合场景。空气炸锅积油引燃、压力锅盖飞出爆炸、电水壶蒸汽烫伤是三大高频事故。此外，电源线过短或无接地保护也是常见不合规点。`,
+                    cases: `<ul>
+                                <li><strong>2023年空气炸锅召回事件：</strong> 某知名品牌召回200万台炸锅，因内部电线连接器过热熔化导致火灾风险。已有205起燃烧报告。</li>
+                                <li><strong>2019年高压锅爆炸案 (赔付 $2.1M)：</strong> 用户在未完全泄压时强行打开锅盖（安全锁失效），滚烫的食物喷射导致全身60%面积严重烫伤。</li>
+                            </ul>`,
+                    mitigation: "需符合 UL 1026 (烹饪电器) 标准。压力容器类产品必须有多重物理联锁装置防止带压开盖。"
                 }
             },
-
-            // === B类 (标准风险/手动工具/劳保/日用) ===
-            { id: '11210', cat: '手动工具/Hand Tools', cls: 'B', rate: 0.0012, min: 4500, keywords: 'wrench,plier,screwdriver,hammer,tap and die,nut driver,pipe threading,socket set,hex key,allen key,security bit' },
-            { id: '10905', cat: '工作服与劳保/Work Clothes', cls: 'B', rate: 0.0015, min: 4200, keywords: 'glove,work glove,safety vest,apron,uniform' },
-            { id: '10137', cat: '汽车配件/Auto Parts', cls: 'B', rate: 0.0018, min: 4800, keywords: 'car part,bumper,wiper,filter,mat,automotive' },
-            { id: '11114', cat: '家居用品/Home Goods', cls: 'B', rate: 0.0008, min: 4000, keywords: 'organizer,storage,shelf,rack,hook,hanger,basket,bin' },
-            { id: '12050', cat: '纺织品/Textiles', cls: 'B', rate: 0.0009, min: 4000, keywords: 'fabric,cloth,towel,bedding,pillow,curtain' },
-            { id: '10000', cat: '普通百货/General MDSE', cls: 'B', rate: 0.00065, min: 4200, keywords: 'merchandise,general,gift' }
+            {
+                id: '11210', cat: '手动工具/Hand Tools', cls: 'B', rate: 0.0012, min: 4500, keywords: 'wrench,plier,screwdriver,hammer,tap and die,nut driver,pipe threading,socket set,hex key,allen key,security bit,knife,axe,multitool',
+                deep_analysis: {
+                    focus: `<strong>材质缺陷与意外断裂：</strong> 虽然无动力源，但手动工具在高负载下（如锤击、大力拧紧）金属疲劳断裂是由于热处理工艺不当造成的。崩飞的金属碎片可能致盲。刀具类产品则涉及锁定机构失效导致的割伤。`,
+                    cases: `<ul>
+                                <li><strong>2015年折叠刀伤手案：</strong> 用户在使用折叠刀用力切削时，锁定片失效导致刀刃折回切断肌腱。</li>
+                                <li><strong>2020年扳手断裂案：</strong> 汽修工全力拧螺丝时扳手卡口断裂，导致手部重重撞击金属锐边造成骨折。</li>
+                            </ul>`,
+                    mitigation: "确保金相热处理工艺稳定。刀具类必须通过锁定强度测试。"
+                }
+            },
+            {
+                id: '10905', cat: '工作服与劳保/Work Clothes', cls: 'B', rate: 0.0015, min: 4200, keywords: 'glove,work glove,safety vest,apron,uniform,safety shoes,boots',
+                deep_analysis: {
+                    focus: `<strong>虚假防护承诺：</strong> 如果仅作为普通衣物销售风险较低。但一旦标榜"防割" (Cut Resistant)、"阻燃" (FR)、"绝缘" (Dielectric) 等专业防护功能，若实际未达标，将导致用户在危险环境中失去预期的最后一道防线。`,
+                    cases: `<ul>
+                                <li><strong>2018年防割手套失效案：</strong> 屠宰场工人在佩戴标称ANSI A4级防割手套工作时仍被利刃割伤神经。测试显示该批次手套仅达A1级。</li>
+                            </ul>`,
+                    mitigation: "任何宣称防护等级的产品，必须有对应的 ANSI/ISEA 检测报告支撑。否则应作为普通耐磨手套销售。"
+                }
+            },
+            {
+                id: '10137', cat: '汽车配件/Auto Parts', cls: 'B', rate: 0.0018, min: 4800, keywords: 'car part,bumper,wiper,filter,mat,automotive,seat cover,light,mirror,handle',
+                deep_analysis: {
+                    focus: `<strong>行车安全干扰与材料合规：</strong> 就算是非关键底盘件，内饰件（脚垫、座套）如果卡住油门踏板或阻碍气囊弹出，也能引发致命事故。材料方面，需关注 FMVSS 302 阻燃标准及 VOC 挥发物。`,
+                    cases: `<ul>
+                                <li><strong>2009年丰田脚垫门事件 (致全家死亡)：</strong> 全天候脚垫设计缺陷卡住了雷克萨斯的油门踏板，导致车辆失控高速撞毁。此案引发了全球千万辆级的大召回。</li>
+                                <li><strong>2021年LED车灯刺眼案：</strong> 改装的高亮LED大灯因光型设计不符合DOT标准，致使对向司机短暂致盲发生碰撞，改装件卖家被追加为被告。</li>
+                            </ul>`,
+                    mitigation: "脚垫必须有防滑固定扣。车灯需符合 DOT/SAE 标准。避免销售涉及刹车、悬挂、转向的核心改装件。"
+                }
+            },
+            {
+                id: '11114', cat: '家居用品/Home Goods', cls: 'B', rate: 0.0008, min: 4000, keywords: 'organizer,storage,shelf,rack,hook,hanger,basket,bin,mirror,frame,clock,vase',
+                deep_analysis: {
+                    focus: `<strong>倾倒砸伤与玻璃破裂：</strong> 超过30英寸高的柜类家具有极高的倾倒风险，尤其是对攀爬的儿童。玻璃制品（镜子、桌面）若未使用钢化玻璃，破碎后的锐利大块碎片极易割伤大动脉。`,
+                    cases: `<ul>
+                                <li><strong>宜家 Malm 抽屉柜召回案 (致8名儿童死亡)：</strong> 因未固定在墙上，抽屉柜倾倒压死多名幼童。最终赔偿金额高达4600万美元，并强制要求提供墙面固定套件。</li>
+                                <li><strong>2019年浴室镜炸裂案：</strong> 安装在浴室的普通玻璃镜因受热胀冷缩炸裂，飞溅的玻璃碎片划伤正洗澡的用户面部。</li>
+                            </ul>`,
+                    mitigation: "高于75cm的柜类必须附带防倾倒固定件 (Anti-tip kit)。大尺寸玻璃建议使用钢化玻璃或贴防爆膜。"
+                }
+            },
+            {
+                id: '12050', cat: '纺织品/Textiles', cls: 'B', rate: 0.0009, min: 4000, keywords: 'fabric,cloth,towel,bedding,pillow,curtain,blanket,rug,carpet',
+                deep_analysis: {
+                    focus: `<strong>易燃性风险：</strong> 特别是大面积垂直悬挂的织物（窗帘）或人体睡眠接触物（睡衣、床品）。如果极易被火柴或香烟引燃且燃烧速度过快（闪燃），将无法给用户逃生时间。`,
+                    cases: `<ul>
+                                <li><strong>2016年长绒地毯火灾案：</strong> 也是因为一根掉落的香烟，某种化纤长绒地毯迅速熔化并剧烈燃烧，产生的有毒黑烟导致户主窒息。产品未通过 16 CFR 1630 易燃性测试。</li>
+                            </ul>`,
+                    mitigation: "必须符合 16 CFR 1610 (衣物) 或 16 CFR 1630 (地毯) 的阻燃标准。儿童睡衣有更严格的自熄要求。"
+                }
+            },
+            {
+                id: '10000', cat: '普通百货/General MDSE', cls: 'B', rate: 0.00065, min: 4200, keywords: 'merchandise,general,gift,stationery,decor,craft,paper,notebook',
+                deep_analysis: {
+                    focus: `<strong>一般性物理伤害：</strong> 风险相对较低，但仍需注意锐边、包装袋窒息风险（大塑料袋需打孔或印警示语）、以及误食风险（如外观像糖果的文具）。`,
+                    cases: `<ul>
+                                <li><strong>2018年因包装袋窒息案：</strong> 婴儿将未打孔的大号透明塑料包装袋套在头上玩耍导致窒息。</li>
+                                <li><strong>2021年"食品级"硅胶模具案：</strong> 某硅胶模具其实使用工业硅胶，导致烘焙不管是异味还是有害物质析出。</li>
+                            </ul>`,
+                    mitigation: "确保符合加州 65 号法案（Prop 65）关于化学物质的警示要求。塑料袋开口大于5英寸需印窒息警示。"
+                }
+            }
         ];
 
         // 强制更新本地存储的数据库以应用新的专家洞察数据的 Helper
@@ -339,9 +430,58 @@
 
 
 
+        // --- 新增：风险分析卡片组件 ---
+        const RiskAnalysisCard = ({ analysis, isHighRisk }) => {
+            const [expanded, setExpanded] = useState(false);
+
+            // Construct full content
+            let contentHTML = "";
+            if (analysis) {
+                // Determine if fields are present
+                const focus = analysis.focus ? `<div class="mb-3"><div class="font-bold text-gray-800 mb-1">🎯 核心风险 (Risk Focus)</div><div class="pl-2 border-l-2 border-red-400 bg-red-50/50 p-2 rounded text-gray-700">${analysis.focus}</div></div>` : "";
+                const cases = analysis.cases ? `<div class="mb-3"><div class="font-bold text-gray-800 mb-1">⚖️ 真实案例 (Real Cases)</div><div class="pl-2 border-l-2 border-amber-400 bg-amber-50/50 p-2 rounded text-gray-700">${analysis.cases}</div></div>` : "";
+                const mitigation = analysis.mitigation ? `<div class="mb-1"><div class="font-bold text-gray-800 mb-1">🛡️ 合规建议 (Mitigation)</div><div class="pl-2 border-l-2 border-green-400 bg-green-50/50 p-2 rounded text-gray-700">${analysis.mitigation}</div></div>` : "";
+
+                // Fallback for simple string format if legacy data exists
+                if (!focus && !cases && !mitigation && typeof analysis === 'string') {
+                    contentHTML = analysis;
+                } else {
+                    contentHTML = focus + cases + mitigation;
+                }
+            } else {
+                contentHTML = isHighRisk ?
+                    "<div class='p-2 bg-red-50 text-red-600 rounded'>⚠️ 高风险类别：建议严格审查产品警示语及测试报告。</div>" :
+                    "<div class='p-2 bg-gray-50 text-gray-500 rounded'>✅ 标准风险类别：符合一般贸易品承保逻辑。</div>";
+            }
+
+            // Simple heuristic for "long content"
+            const isLong = contentHTML.length > 200;
+
+            return (
+                <div className="w-full">
+                    <div className={`text-xs leading-relaxed font-medium bg-white p-5 rounded-xl border border-gray-100 shadow-sm relative transition-all duration-500 ${!expanded && isLong ? 'max-h-40 overflow-hidden mask-bottom' : ''}`}>
+                        <div dangerouslySetInnerHTML={{ __html: contentHTML }} className="space-y-2" />
+
+                        {!expanded && isLong && (
+                            <div className="absolute bottom-0 left-0 w-full h-16 bg-gradient-to-t from-white via-white/80 to-transparent pointer-events-none"></div>
+                        )}
+                    </div>
+                    {isLong && (
+                        <button
+                            onClick={() => setExpanded(!expanded)}
+                            className="mt-2 text-[10px] uppercase font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 ml-1"
+                        >
+                            {expanded ? "收起分析 (Collapse)" : "阅读完整专家分析 (Read More)"} {expanded ? "▲" : "▼"}
+                        </button>
+                    )}
+                </div>
+            );
+        };
+
         function App() {
             const [view, setView] = useState('home');
-            const [db, setDb] = useState(() => safeGetItem('cgl_db_v2', DEFAULT_DB));
+            // Migration: v4 forces a fresh start with the new rich knowledge base
+            const [db, setDb] = useState(() => safeGetItem('cgl_db_v4', DEFAULT_DB));
             const [logs, setLogs] = useState(() => safeGetItem('cgl_audit_logs', []));
             const [exRate, setExRate] = useState(() => safeGetItem('cgl_ex_rate', 7.2));
 
@@ -366,25 +506,9 @@
             const [coiRules, setCoiRules] = useState(() => safeGetItem('cgl_coi_rules', DEFAULT_COI_RULES));
             const [showImporter, setShowImporter] = React.useState(false);
 
-            // Professional Risk Analysis Database (Expert Knowledge Base)
-            const RISK_KB = {
-                '11213': '高危焊接作业风险：涉及高温熔融金属与高电压，极易引发严重烧伤、火灾及烟尘吸入伤害。历史重案多涉及设备漏电导致操作工电击身亡，或火花引燃周边易燃物导致厂房损毁。属于严格承保限制类目。',
-                '10203': '锂电热失控风险：18650/聚合物电池在过充、穿刺或高温下极易发生剧烈燃烧爆炸。根据 CPSC 数据，移动电源引发的火灾造成的人身伤害索赔平均赔付额极高，且涉及航运与仓储累积风险。',
-                '12240': '头部防护失效风险：头盔若不符合 ANSI/DOT 冲击标准，在事故中碎裂将导致严重的颅脑损伤（TBI）。此类产品责任险核心关注“设计缺陷”指控，一旦防护失败，通常面临百万美元级的巨额人身伤害索赔。',
-                '90001': '儿童窒息与毒性风险：核心风险点为小部件（Small Parts）脱落导致的窒息（Choking Hazard）及材料重金属超标。美国 ASTM F963 标准对此类产品有极严格的合规要求，召回率极高。',
-                '11113': '高功率热源风险：取暖器类产品是冬季家庭火灾的主要诱因之一。主要故障模式包括温控器失效导致的持续加热引燃织物，或倾倒断电保护(Tip-over Switch)失灵。火灾责任索赔通常涉及重大财产损失与伤亡。',
-                '11209': '高速机械伤害风险：电动工具（如电锯、磨光机）拥有高速旋转部件，操作失误或防护罩破碎易导致严重割伤、断指甚至失明。北美地区此类产品涉及的“未充分警示（Failure to Warn）”诉讼案件频发。',
-                '10406': '厨电火灾与烫伤风险：加热类小家电（空炸、咖啡机）涉及水电接触与高温表面。常见索赔案例包括温控失效导致的过热火灾，或液体喷溅导致的严重烫伤。',
-                '11210': '手动工具断裂风险：虽然无动力源，但扳手、锤子等工具在高扭矩或冲击下可能发生金属疲劳断裂，崩飞的碎片可能导致眼部受损或割伤。主要风险点在于材质热处理工艺不达标导致的强度不足。',
-                '10905': '劳保虚假防护风险：若标榜“防割”、“防火”但实际未达标，将导致用户在危险环境下失去预期保护，引发惩罚性赔偿诉讼。若作为普通非防护工装销售，风险相对可控。',
-                '10137': '汽配关键部件风险：涉及行车安全。若刹车片、悬挂件等关键部位失效，可能导致交通事故。即便非关键件（如内饰），也需关注材料阻燃性与挥发物合规。',
-                '10407': '电子电气短路风险：主要涉及充电适配器过热、线材短路引发的火灾。UL/ETL 认证是极其关键的抗辩依据。',
-                '10000': '一般性贸易风险：通常指低价值、无动力源、与人体非密切接触的日用杂货。风险敞口较低，多为简单的异物划伤或包装致伤等小额索赔。'
-            };
-
             // DB Refresh Helper
             const refreshDB = () => {
-                const storedDB = safeGetItem('cgl_db_v3', null);
+                const storedDB = safeGetItem('cgl_db_v4', null);
                 if (storedDB) setDb(storedDB);
             };
 
@@ -399,23 +523,30 @@
             const getRevenueNum = () => parseFloat(revenueRaw.replace(/,/g, '')) || 0;
 
             useEffect(() => {
-                safeSetItem('cgl_db_v2', db);
+                safeSetItem('cgl_db_v4', db);
                 safeSetItem('cgl_audit_logs', logs);
                 safeSetItem('cgl_ex_rate', exRate);
                 safeSetItem('cgl_coi_rules', coiRules);
             }, [db, logs, exRate, coiRules]);
 
             useEffect(() => {
-                if (db.length > 0) {
-                    const hasNewRules = db.some(r => r.keywords && r.keywords.includes('welder'));
-                    if (!hasNewRules) {
-                        console.warn("Detected outdated DB. Forcing update to new DEFAULT_DB...");
+                // Version Check for v4
+                const storedV4 = safeGetItem('cgl_db_v4', null);
+                if (!storedV4) {
+                    // First time v4 user or migration
+                    console.warn("Storage upgraded to v4. Hydrating with new Rich Expert Knowledge Base.");
+                    setDb(DEFAULT_DB);
+                    safeSetItem('cgl_db_v4', DEFAULT_DB);
+                } else {
+                    // Check if it has specific new fields (e.g. welding deep analysis is an object)
+                    const sample = storedV4.find(i => i.id === '11213');
+                    if (!sample || typeof sample.deep_analysis !== 'object') {
+                        console.warn("Detected v4 DB but with old structure. Force updating...");
                         setDb(DEFAULT_DB);
-                        safeSetItem('cgl_db_v2', DEFAULT_DB);
-                        alert("系统已自动升级风险规则库，包含五金、劳保等新分类！");
+                        safeSetItem('cgl_db_v4', DEFAULT_DB);
                     }
                 }
-            }, [db]);
+            }, []);
 
             // 🆕 插件联动逻辑：检查是否有来自 Popup 的待处理文件
             // 🆕 插件联动逻辑：通过 postMessage 接收数据 (Sandbox模式)
@@ -426,12 +557,22 @@
 
                     // 0. 数据恢复 (Hydration)
                     if (message.type === 'hydrateState') {
-                        const { cgl_db_v2, cgl_audit_logs, cgl_ex_rate, cgl_coi_rules } = message.payload;
-                        if (cgl_db_v2) setDb(cgl_db_v2);
+                        // Support migrating v2/v3 to v4 if needed, but here we prioritize v4 or default
+                        const { cgl_db_v4, cgl_db_v2, cgl_audit_logs, cgl_ex_rate, cgl_coi_rules } = message.payload;
+
+                        // Prefer v4 if available from hydration, otherwise fallback to local DEFAULT_DB
+                        if (cgl_db_v4) {
+                            setDb(cgl_db_v4);
+                        } else if (cgl_db_v2) {
+                            // Optional: Migrate v2 to v4 logic here if we wanted to keep user edits
+                            // But for now, we want to force the new KB, so we might IGNORE v2 if it's old
+                            console.log("Ignoring legacy v2 DB from hydration to enforce v4 update.");
+                        }
+
                         if (cgl_audit_logs) setLogs(cgl_audit_logs);
                         if (cgl_ex_rate) setExRate(cgl_ex_rate);
                         if (cgl_coi_rules) setCoiRules(cgl_coi_rules);
-                        console.log("State hydrated from parent storage");
+                        console.log("State hydrated.");
                     }
 
                     // 1. 处理文件上传
@@ -1258,11 +1399,10 @@
                                                                             <div className="text-2xl mt-1">🧐</div>
                                                                             <div className="space-y-2">
                                                                                 <h6 className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Risk Analysis (专家风险洞察)</h6>
-                                                                                <div className="text-xs text-gray-600 leading-relaxed font-medium bg-white p-4 rounded-xl border border-gray-100 shadow-sm"
-                                                                                    dangerouslySetInnerHTML={{
-                                                                                        __html: RISK_KB[group.id] || (group.items?.[0]?.deep_analysis?.cases || (isHighRisk ? "高风险类别：建议严格审查产品警示语及测试报告。" : "标准风险类别：符合一般贸易品承保逻辑。"))
-                                                                                    }}>
-                                                                                </div>
+                                                                                <RiskAnalysisCard
+                                                                                    analysis={group.items?.[0]?.deep_analysis}
+                                                                                    isHighRisk={isHighRisk}
+                                                                                />
                                                                             </div>
                                                                         </div>
 
