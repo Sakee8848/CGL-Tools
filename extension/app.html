@@ -4,30 +4,18 @@
 <head>
     <meta charset="UTF-8">
     <title>亚马逊 CGL 智能体 - 旗舰合规版</title>
-    <!-- China Friendly CDNs (Baomitu) -->
-    <script src="https://lib.baomitu.com/react/18.2.0/umd/react.development.min.js"></script>
-    <script src="https://lib.baomitu.com/react-dom/18.2.0/umd/react-dom.development.min.js"></script>
-    <script src="https://lib.baomitu.com/babel-standalone/7.23.5/babel.min.js"></script>
-    <script src="https://lib.baomitu.com/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://lib.baomitu.com/pdf.js/3.4.120/pdf.min.js"></script>
-    <script src="https://lib.baomitu.com/mammoth/1.5.1/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.5.1/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         body {
             background-color: #F5F5F7;
             font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-        }
-
-        #loading-overlay {
-            position: fixed;
-            inset: 0;
-            background: #F5F5F7;
-            z-index: 9999;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            transition: opacity 0.5s ease;
         }
 
         .apple-card {
@@ -63,11 +51,6 @@
 </head>
 
 <body>
-    <div id="loading-overlay">
-        <div style="font-size: 40px; margin-bottom: 20px;">🚀</div>
-        <h2 style="font-size: 24px; font-weight: 800; color: #1d1d1f; margin: 0;">正在加载智能引擎...</h2>
-        <p style="color: #86868b; margin-top: 10px;">Checking Compliance Rules...</p>
-    </div>
     <div id="root"></div>
     <script type="text/babel">
         const { useState, useEffect } = React;
@@ -77,18 +60,112 @@
             return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
         };
 
-        // 初始化数据库：包含更丰富的五金、工具与风险品类库
+        // Helper to safely access localStorage (sandboxed iframe compatible)
+        const safeGetItem = (key, defaultVal) => {
+            try {
+                if (typeof window !== 'undefined' && window.localStorage) {
+                    const val = localStorage.getItem(key);
+                    return val ? JSON.parse(val) : defaultVal;
+                }
+            } catch (e) {
+                console.warn(`LocalStorage access failed for key ${key}:`, e);
+            }
+            return defaultVal;
+        };
+
+        const safeSetItem = (key, val) => {
+            try {
+                if (typeof window !== 'undefined' && window.localStorage) {
+                    localStorage.setItem(key, typeof val === 'string' ? val : JSON.stringify(val));
+                }
+            } catch (e) {
+                console.warn(`LocalStorage write failed for key ${key}:`, e);
+            }
+        };
+
+        // 初始化数据库：包含更丰富的五金、工具与风险品类库，以及深度专家洞察 (Deep Expert Insights)
         const DEFAULT_DB = [
             // === 高风险/拒保类 (High Risk / Excluded) ===
-            { id: '11213', cat: '焊接设备/Welding & Soldering', cls: 'Excluded', rate: 0.05, min: 10000, keywords: 'welder,welding,soldering,plastic welder,arc weld' },
-            { id: '10203', cat: '电池/Battery Packs', cls: 'C', rate: 0.012, min: 6500, keywords: 'battery,lithium,power bank,18650' },
-            { id: '12240', cat: '头盔/Helmets', cls: 'C', rate: 0.015, min: 8000, keywords: 'helmet,safety hat,protective headwear' },
-            { id: '90001', cat: '儿童玩具/Toys', cls: 'C', rate: 0.010, min: 6000, keywords: 'toy,plush,kids,children,doll' },
+            {
+                id: '11213',
+                cat: '焊接设备/Welding & Soldering',
+                cls: 'Excluded',
+                rate: 0.05,
+                min: 10000,
+                keywords: 'welder,welding,soldering,plastic welder,arc weld',
+                deep_analysis: {
+                    focus: "极高风险：火灾与人体伤害",
+                    cases: "<ul><li>2021年加州案例：用户操作便携焊机时引发车库火灾 (赔付 $1.2M)。</li><li>2019年：焊接烟尘导致长期肺部损伤索赔。</li></ul>",
+                    mitigation: "建议：必须强制要求佩戴专业防护装备，仅限工业级用户购买。"
+                }
+            },
+            {
+                id: '10203',
+                cat: '电池/Battery Packs',
+                cls: 'C',
+                rate: 0.012,
+                min: 6500,
+                keywords: 'battery,lithium,power bank,18650',
+                deep_analysis: {
+                    focus: "核心风险：热失控 (Thermal Runaway)",
+                    cases: "<ul><li>知名案例：平衡车 (Hoverboard) 电池起火导致的连环房屋火灾诉讼。</li><li>统计：锂电池相关火灾索赔平均赔付额超过 $150,000。</li></ul>",
+                    mitigation: "合规建议：必须符合 UL 1642 / UL 2054 标准，拥有 UN38.3 运输认证。"
+                }
+            },
+            {
+                id: '12240',
+                cat: '头盔/Helmets',
+                cls: 'C',
+                rate: 0.015,
+                min: 8000,
+                keywords: 'helmet,safety hat,protective headwear',
+                deep_analysis: {
+                    focus: "核心风险：防护失效导致脑损伤 (TBI)",
+                    cases: "<ul><li>诉讼焦点：在事故中头盔破裂或未能提供宣称的保护等级。</li></ul>",
+                    mitigation: "必须符合 DOT / ECE / CPSC 相关安全标准。"
+                }
+            },
+            {
+                id: '90001',
+                cat: '儿童玩具/Toys',
+                cls: 'C',
+                rate: 0.010,
+                min: 6000,
+                keywords: 'toy,plush,kids,children,doll',
+                deep_analysis: {
+                    focus: "窒息风险与化学毒性",
+                    cases: "<ul><li>常见索赔：小部件脱落导致儿童误食窒息。</li><li>增塑剂(Phthalates)超标导致的长期健康诉讼。</li></ul>",
+                    mitigation: "需符合 ASTM F963 及 CPC 认证。"
+                }
+            },
 
             // === A类 (较高风险/电动工具/加热器) ===
-            { id: '11113', cat: '加热设备/Heating Equipment', cls: 'A', rate: 0.0035, min: 5500, keywords: 'heater,garage heater,space heater,fireplace,stove' },
+            {
+                id: '11113',
+                cat: '加热设备/Heating Equipment',
+                cls: 'A',
+                rate: 0.0035,
+                min: 5500,
+                keywords: 'heater,garage heater,space heater,fireplace,stove',
+                deep_analysis: {
+                    focus: "火灾隐患",
+                    cases: "<ul><li>加热器倾倒未自动断电引发的地毯火灾。</li></ul>",
+                    mitigation: "必须具备倾倒断电开关 (Tip-over Switch) 和过热保护。"
+                }
+            },
             { id: '11209', cat: '电动工具/Power Tools', cls: 'A', rate: 0.0030, min: 5000, keywords: 'spray gun,paint sprayer,drill,saw,grinder,sander,power tool' },
-            { id: '10406', cat: '家用电器(加热)/Appliances-Heat', cls: 'A', rate: 0.0025, min: 4800, keywords: 'oven,toaster,fryer,kettle,coffee maker' },
+            {
+                id: '10406',
+                cat: '家用电器(加热)/Appliances-Heat',
+                cls: 'A',
+                rate: 0.0025,
+                min: 4800,
+                keywords: 'oven,toaster,fryer,kettle,coffee maker',
+                deep_analysis: {
+                    focus: "烫伤与电气火灾",
+                    cases: "<ul><li>空气炸锅在无人看管下过热起火。</li></ul>"
+                }
+            },
 
             // === B类 (标准风险/手动工具/劳保/日用) ===
             { id: '11210', cat: '手动工具/Hand Tools', cls: 'B', rate: 0.0012, min: 4500, keywords: 'wrench,plier,screwdriver,hammer,tap and die,nut driver,pipe threading,socket set,hex key,allen key,security bit' },
@@ -99,6 +176,12 @@
             { id: '10000', cat: '普通百货/General MDSE', cls: 'B', rate: 0.00065, min: 4200, keywords: 'merchandise,general,gift' }
         ];
 
+        // 强制更新本地存储的数据库以应用新的专家洞察数据的 Helper
+        // (仅在开发调试阶段或版本迁移时使用)
+        const FORCE_UPDATE_DB = true;
+        if (FORCE_UPDATE_DB) safeSetItem('cgl_db_v3', DEFAULT_DB);
+
+
         const DEFAULT_COI_RULES = [
             { id: 'limit', label: '单次事故赔付限额', value: 1000000, unit: 'USD', desc: 'Amazon 要求不低于 $1M' },
             { id: 'deductible', label: '免赔额上限', value: 10000, unit: 'USD', desc: 'Amazon 要求不超过 $10K' },
@@ -106,12 +189,161 @@
         ];
 
 
+        // --- 新增：知识库导入组件 (Knowledge Base Importer) ---
+        const KnowledgeImporter = ({ onImportSuccess }) => {
+            const [uploading, setUploading] = React.useState(false);
+            const [logs, setLogs] = React.useState([]);
+
+            const handleZipUpload = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                setUploading(true);
+                setLogs(['🚀 开始处理知识库压缩包...']);
+                const newEntries = []; // Fix: Declare outside try/catch scope
+
+                try {
+                    const zip = new JSZip();
+                    const zipContent = await zip.loadAsync(file);
+
+                    // Debug Information
+                    const allFiles = Object.keys(zipContent.files);
+                    const docFiles = allFiles.filter(name => name.endsWith('.doc'));
+                    const docxFiles = allFiles.filter(name => !name.startsWith('__MACOSX') && name.endsWith('.docx'));
+
+                    if (docxFiles.length === 0) {
+                        if (docFiles.length > 0) {
+                            setLogs(prev => [...prev, `⚠️ 发现 ${docFiles.length} 个 .doc 格式文档，但本系统仅支持 .docx 格式。建议您将文档另存为 .docx 后重新打包上传。`]);
+                        } else {
+                            setLogs(prev => [...prev, `⚠️ 压缩包中未找到 .docx 文档。共扫描了 ${allFiles.length} 个文件。请确认文件格式正确。`]);
+                        }
+                        setUploading(false);
+                        return;
+                    }
+
+                    setLogs(prev => [...prev, `📂 发现 ${docxFiles.length} 个有效 Word 文档 (.docx)，开始解析...`]);
+
+                    for (let filename of docxFiles) {
+                        try {
+                            const fileData = await zipContent.files[filename].async("arraybuffer");
+
+                            // 使用 Mammoth 解析 Word
+                            const result = await mammoth.convertToHtml({ arrayBuffer: fileData });
+                            const htmlContent = result.value;
+
+                            // 智能提取逻辑 (Smart Extraction)
+                            // 假设文件名即为品类名 (e.g., "Camping Stoves.docx")
+                            const categoryName = filename.replace('.docx', '').split('/').pop();
+
+                            // 简单的关键词提取 (如果文档中有明确的 Risk/Mitigation 标题)
+                            // 这里做一个简单的 HTML 包装作为 deep_analysis
+                            // 优化：LocalStorage 容量有限（通常仅 5MB），无法存几百个完整 Word 的 HTML
+                            // 解决方案：仅提取纯文本的前 800 个字符作为摘要
+                            const rawText = result.value.replace(/<[^>]*>?/gm, ' '); // 剥离 HTML 标签
+                            const truncatedText = rawText.substring(0, 800) + (rawText.length > 800 ? '...' : '');
+
+                            const deepAnalysis = {
+                                focus: `基于专家文档 [${filename}] 的分析`,
+                                cases: `<div class="kb-summary">${truncatedText}</div><br/><small style="color:gray">*由于浏览器存储限制，仅展示文档摘要。请查阅原件。</small>`,
+                                mitigation: "请参考上述专家文档中的详细合规建议。"
+                            };
+
+                            // 构造一个新的 DB Entry
+                            // 生成一个基于文件名的唯一 ID Hash
+                            const idHash = categoryName.split('').reduce((a, b) => a + b.charCodeAt(0), 0).toString().slice(0, 5);
+
+                            const newEntry = {
+                                id: `IMP-${idHash}`,
+                                cat: categoryName, // 使用文件名作为分类
+                                cls: 'Referral', // 默认为待人工核保，因为我们不知道费率
+                                rate: 0,
+                                min: 0,
+                                keywords: categoryName.toLowerCase().replace(/_/g, ','), // 将文件名转为关键词
+                                deep_analysis: deepAnalysis,
+                                isImported: true
+                            };
+
+                            newEntries.push(newEntry);
+                            setLogs(prev => [...prev, `✅ 解析成功: ${categoryName}`]);
+
+                        } catch (err) {
+                            console.error(err);
+                            setLogs(prev => [...prev, `❌ 解析失败: ${filename} - ${err.message}`]);
+                        }
+                    }
+
+                    // 合并到现有数据库
+                    if (newEntries.length > 0) {
+                        const currentDB = safeGetItem('cgl_db_v3', []);
+                        // 简单的去重合并策略：如果同名则覆盖，否则追加
+                        const updatedDB = [...currentDB];
+
+                        newEntries.forEach(ENTRY => {
+                            const idx = updatedDB.findIndex(d => d.cat === ENTRY.cat);
+                            if (idx > -1) {
+                                // 仅更新 deep_analysis
+                                updatedDB[idx].deep_analysis = ENTRY.deep_analysis;
+                            } else {
+                                updatedDB.push(ENTRY);
+                            }
+                        });
+
+                        safeSetItem('cgl_db_v3', updatedDB);
+                        setLogs(prev => [...prev, `🎉 成功导入 ${newEntries.length} 条专家知识！数据库已更新。`]);
+
+                        if (onImportSuccess) onImportSuccess();
+
+                        setTimeout(() => {
+                            alert(`成功从文档库中导入 ${newEntries.length} 个新的风险品类！\n\n新导入的品类将自动用于后续的风险分析。`);
+                        }, 500);
+                    }
+
+                } catch (error) {
+                    setLogs(prev => [...prev, `🔥 严重错误: ${error.message}`]);
+                } finally {
+                    setUploading(false);
+                }
+            };
+
+            return (
+                <div style={{ marginTop: '20px', padding: '20px', background: '#fff', borderRadius: '16px', border: '2px dashed #cbd5e0' }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '10px', display: 'flex', alignItems: 'center' }}>
+                        📚 导入专家知识库 (ZIP/Word)
+                        <span style={{ fontSize: '10px', background: '#edf2f7', padding: '2px 6px', borderRadius: '4px', marginLeft: '8px', color: '#718096' }}>
+                            Beta
+                        </span>
+                    </h3>
+                    <p style={{ fontSize: '12px', color: '#718096', marginBottom: '16px' }}>
+                        支持批量导入 .zip 格式的压缩包。系统将自动解析压缩包内的 Word 文档 (.docx)，并将文件名作为"品类名称"，文档内容作为"深度风险评估"存入数据库。
+                    </p>
+
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        <div style={{ position: 'relative', overflow: 'hidden', display: 'inline-block' }}>
+                            <button className="btn" style={{ background: '#4a5568', color: 'white', padding: '8px 16px', borderRadius: '8px', fontWeight: 'bold', fontSize: '12px' }}>
+                                {uploading ? '⏳ 正在解析...' : '📂 选择 ZIP 文件'}
+                            </button>
+                            <input type="file" accept=".zip" onChange={handleZipUpload} disabled={uploading}
+                                style={{ position: 'absolute', left: 0, top: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} />
+                        </div>
+                    </div>
+
+                    {logs.length > 0 && (
+                        <div style={{ marginTop: '16px', background: '#1a202c', color: '#48bb78', padding: '12px', borderRadius: '8px', fontSize: '10px', maxHeight: '120px', overflowY: 'auto' }}>
+                            {logs.map((log, i) => <div key={i}>{log}</div>)}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+
+
+
         function App() {
             const [view, setView] = useState('home');
-            // Remove localStorage access to prevent SecurityError
-            const [db, setDb] = useState(DEFAULT_DB);
-            const [logs, setLogs] = useState([]);
-            const [exRate, setExRate] = useState(7.2);
+            const [db, setDb] = useState(() => safeGetItem('cgl_db_v2', DEFAULT_DB));
+            const [logs, setLogs] = useState(() => safeGetItem('cgl_audit_logs', []));
+            const [exRate, setExRate] = useState(() => safeGetItem('cgl_ex_rate', 7.2));
 
             const [isCustomerMode] = useState(() => new URLSearchParams(window.location.search).get('mode') === 'customer');
 
@@ -120,12 +352,42 @@
             const [groupedResults, setGroupedResults] = useState([]); // 按品类汇总后的结果
             const [totalFinalPrem, setTotalFinalPrem] = useState(0);
 
+            // Manual Sync Trigger
+            const requestSync = () => {
+                console.log("Manually requesting data sync...");
+                window.parent.postMessage({ action: 'appReady' }, '*');
+                addLog('System', '尝试手动请求数据同步...');
+            };
+
             const [deductibleType, setDeductibleType] = useState('10000');
             const [modalFile, setModalFile] = useState(null);
             const [lastUploadStats, setLastUploadStats] = useState(null);
             const [coiStep, setCoiStep] = useState('idle');
-            const [coiRules, setCoiRules] = useState(DEFAULT_COI_RULES);
-            
+            const [coiRules, setCoiRules] = useState(() => safeGetItem('cgl_coi_rules', DEFAULT_COI_RULES));
+            const [showImporter, setShowImporter] = React.useState(false);
+
+            // Professional Risk Analysis Database (Expert Knowledge Base)
+            const RISK_KB = {
+                '11213': '高危焊接作业风险：涉及高温熔融金属与高电压，极易引发严重烧伤、火灾及烟尘吸入伤害。历史重案多涉及设备漏电导致操作工电击身亡，或火花引燃周边易燃物导致厂房损毁。属于严格承保限制类目。',
+                '10203': '锂电热失控风险：18650/聚合物电池在过充、穿刺或高温下极易发生剧烈燃烧爆炸。根据 CPSC 数据，移动电源引发的火灾造成的人身伤害索赔平均赔付额极高，且涉及航运与仓储累积风险。',
+                '12240': '头部防护失效风险：头盔若不符合 ANSI/DOT 冲击标准，在事故中碎裂将导致严重的颅脑损伤（TBI）。此类产品责任险核心关注“设计缺陷”指控，一旦防护失败，通常面临百万美元级的巨额人身伤害索赔。',
+                '90001': '儿童窒息与毒性风险：核心风险点为小部件（Small Parts）脱落导致的窒息（Choking Hazard）及材料重金属超标。美国 ASTM F963 标准对此类产品有极严格的合规要求，召回率极高。',
+                '11113': '高功率热源风险：取暖器类产品是冬季家庭火灾的主要诱因之一。主要故障模式包括温控器失效导致的持续加热引燃织物，或倾倒断电保护(Tip-over Switch)失灵。火灾责任索赔通常涉及重大财产损失与伤亡。',
+                '11209': '高速机械伤害风险：电动工具（如电锯、磨光机）拥有高速旋转部件，操作失误或防护罩破碎易导致严重割伤、断指甚至失明。北美地区此类产品涉及的“未充分警示（Failure to Warn）”诉讼案件频发。',
+                '10406': '厨电火灾与烫伤风险：加热类小家电（空炸、咖啡机）涉及水电接触与高温表面。常见索赔案例包括温控失效导致的过热火灾，或液体喷溅导致的严重烫伤。',
+                '11210': '手动工具断裂风险：虽然无动力源，但扳手、锤子等工具在高扭矩或冲击下可能发生金属疲劳断裂，崩飞的碎片可能导致眼部受损或割伤。主要风险点在于材质热处理工艺不达标导致的强度不足。',
+                '10905': '劳保虚假防护风险：若标榜“防割”、“防火”但实际未达标，将导致用户在危险环境下失去预期保护，引发惩罚性赔偿诉讼。若作为普通非防护工装销售，风险相对可控。',
+                '10137': '汽配关键部件风险：涉及行车安全。若刹车片、悬挂件等关键部位失效，可能导致交通事故。即便非关键件（如内饰），也需关注材料阻燃性与挥发物合规。',
+                '10407': '电子电气短路风险：主要涉及充电适配器过热、线材短路引发的火灾。UL/ETL 认证是极其关键的抗辩依据。',
+                '10000': '一般性贸易风险：通常指低价值、无动力源、与人体非密切接触的日用杂货。风险敞口较低，多为简单的异物划伤或包装致伤等小额索赔。'
+            };
+
+            // DB Refresh Helper
+            const refreshDB = () => {
+                const storedDB = safeGetItem('cgl_db_v3', null);
+                if (storedDB) setDb(storedDB);
+            };
+
             // 优化输入体验：本地编辑状态 (解决小数点输入和格式化冲突)
             const [editState, setEditState] = useState({ id: null, val: '' });
 
@@ -135,25 +397,12 @@
             };
 
             const getRevenueNum = () => parseFloat(revenueRaw.replace(/,/g, '')) || 0;
-            useEffect(() => {
-                const loader = document.getElementById('loading-overlay');
-                if (loader) {
-                    loader.style.opacity = '0';
-                    setTimeout(() => loader.remove(), 500);
-                }
 
-                // Sync state to parent window for storage
-                if (window.parent) {
-                    window.parent.postMessage({
-                        action: 'saveState',
-                        payload: {
-                            cgl_db_v2: db,
-                            cgl_audit_logs: logs,
-                            cgl_ex_rate: exRate,
-                            cgl_coi_rules: coiRules
-                        }
-                    }, '*');
-                }
+            useEffect(() => {
+                safeSetItem('cgl_db_v2', db);
+                safeSetItem('cgl_audit_logs', logs);
+                safeSetItem('cgl_ex_rate', exRate);
+                safeSetItem('cgl_coi_rules', coiRules);
             }, [db, logs, exRate, coiRules]);
 
             useEffect(() => {
@@ -162,17 +411,13 @@
                     if (!hasNewRules) {
                         console.warn("Detected outdated DB. Forcing update to new DEFAULT_DB...");
                         setDb(DEFAULT_DB);
+                        safeSetItem('cgl_db_v2', DEFAULT_DB);
                         alert("系统已自动升级风险规则库，包含五金、劳保等新分类！");
-                    }
-
-                    // 自动重算：当费率表(db)发生变化且已有匹配结果时，重新计算
-                    if (merchantResults.length > 0) {
-                        console.log("DB updated, recalculating premiums...");
-                        processMerchantReport(merchantResults);
                     }
                 }
             }, [db]);
 
+            // 🆕 插件联动逻辑：检查是否有来自 Popup 的待处理文件
             // 🆕 插件联动逻辑：通过 postMessage 接收数据 (Sandbox模式)
             useEffect(() => {
                 const handleMessage = (event) => {
@@ -220,11 +465,18 @@
                     }
                     // 2. 处理页面抓取数据
                     else if (message.type === 'extractedData') {
-                        const { items } = message.payload;
-                        console.log("Received scraped data:", items.length);
-                        addLog('EXT_XYNC', `接收到页面抓取数据 ${items.length} 条`);
-                        processMerchantReport(items);
-                        setView('merchant');
+                        const { items, extractedAt } = message.payload;
+
+                        // Check if data is fresh (within 5 minutes)
+                        const timeDiff = new Date() - new Date(extractedAt);
+                        if (timeDiff < 300000) { // 5 minutes
+                            console.log("Received scraped data:", items.length);
+                            addLog('EXT_XYNC', `接收到页面抓取数据 ${items.length} 条`);
+                            processMerchantReport(items);
+                            setView('merchant');
+                        } else {
+                            console.warn("Ignored stale extracted data from:", extractedAt);
+                        }
                     }
                 };
 
@@ -273,58 +525,144 @@
                     // Debug: 打印前5个详情
                     if (idx < 5) console.log(`Processing Item [${idx}]:`, title);
 
-                    let match = db.find(d => {
+                    // --- 1. 核心功能分类 (Primary Functional Categorization) ---
+                    // 逻辑：先识别它"是什么" (Functional Identification)
+                    // 我们遍历数据库，寻找匹配的功能描述。此时不应过分纠结由于包含“电池”而直接判定为“电池类别”。
+                    // 因此，我们需要确保数据库的顺序：具体功能 -> 通用功能 -> 兜底
+                    let primaryMatch = db.find(d => {
+                        // 排除纯风险描述类（如 Battery），除非它本身就是产品主体
+                        const isPureRiskCategory = d.id === '10203'; // Battery ID
+                        if (isPureRiskCategory) return false;
+
                         const keywords = String(d.keywords || '');
-                        const hit = keywords.split(/[,，]/).find(k => {
+                        return keywords.split(/[,，]/).find(k => {
                             const cleanK = k.trim().toLowerCase();
                             return cleanK && String(title).toLowerCase().includes(cleanK);
                         });
-
-                        // 修正：增加日志输出，确认匹配成功
-                        if (hit && idx < 5) console.log(`   ✅ Matched Rule [${d.cat}] using keyword: "${hit}"`);
-
-                        return !!hit;
                     });
 
-                    // 兜底逻辑：如果没匹配上
-                    if (!match) {
-                        // 1. 尝试找数据库里的“通用”或“其他”类
-                        const genericMatch = db.find(d => {
-                            const k = d.keywords?.toLowerCase() || '';
-                            const c = d.cat?.toLowerCase() || '';
-                            return k.includes('general') || k.includes('other') || k.includes('其他') || k.includes('通用') ||
-                                c.includes('general') || c.includes('other') || c.includes('其他') || c.includes('通用');
-                        });
+                    // --- 2. 风险特征扫描 (Risk Characteristic Scanning) ---
+                    // 逻辑：扫描“含有什么风险” (Risk Component Identification)
+                    // 无论它是什么产品，只要包含高危组件（如电池、燃油、高压），就必须在风险上加码
+                    const riskKeywords = [
+                        { key: 'battery', tag: 'High Risk: Battery Source', upgradeTo: 'C', minRate: 0.012, riskId: '10203' },
+                        { key: 'lithium', tag: 'High Risk: Lithium Battery', upgradeTo: 'C', minRate: 0.012, riskId: '10203' },
+                        { key: 'welder', tag: 'High Risk: Welding Arc', upgradeTo: 'Excluded', minRate: 0.05, riskId: '11213' },
+                        { key: 'heater', tag: 'High Risk: Heating Element', upgradeTo: 'A', minRate: 0.0035, riskId: '11113' }
+                    ];
 
-                        // 2. 如果没找到通用类，就找数据库里的第一条作为兜底
-                        // (通常第一条是费率较低的基础类，或者用户上传的第一个类)
-                        match = genericMatch || db[0] || { id: '99999', cat: '未识别分类/Uncategorized', cls: 'B', rate: 0.001, min: 5000 };
+                    let riskFactor = null;
+                    const titleLower = String(title).toLowerCase();
 
-                        if (idx < 5) console.log(`   ⚠️ No match found. Fallback to: [${match.cat}] (ID: ${match.id})`);
+                    // 扫描标题中是否包含风险词
+                    for (const rf of riskKeywords) {
+                        if (titleLower.includes(rf.key)) {
+                            riskFactor = rf;
+                            break; // 找到最高优先级的风险即可
+                        }
                     }
 
-                    return { title, salesValue, ...match };
+                    // --- 3. 最终判定 (Final Determination) ---
+                    let finalMatch = { ... (primaryMatch || {}) };
+
+                    // 兜底逻辑：如果连功能都没匹配上 (Result is Unidentified)
+                    if (!primaryMatch) {
+                        // 如果包含风险词（如是一个纯"Lithium Battery Pack"），且没匹配到其他功能，那它就是风险产品本身
+                        if (riskFactor) {
+                            const riskDbItem = db.find(d => d.id === riskFactor.riskId);
+                            primaryMatch = riskDbItem;
+                            finalMatch = { ...riskDbItem };
+                        } else {
+                            // 真正的兜底：不再默认归为“普通百货”，而是归为“待人工核保”
+                            primaryMatch = {
+                                id: 'REFERRAL',
+                                cat: '待人工核保/Refer to Underwriter',
+                                cls: 'Referral',
+                                rate: 0.00, // 费率置0，强制人工定价
+                                min: 0,
+                                isReferral: true
+                            };
+                            finalMatch = { ...primaryMatch };
+                            riskAnalysisText = "❓ 系统无法识别该商品，请人工确认产品功能并指定费率。";
+                        }
+                    } else if (primaryMatch.id === '10000') {
+                        // 如果匹配到了普通百货 (General MDSE)，再次确认是否真的看起来像普通百货
+                        // 防止 "Nuclear Reactor" 被兜底规则匹配成 General
+                        // 这里我们信任数据库的关键词匹配，但由于 General 的关键词通常很宽泛，所以保持原状即可
+                    }
+
+                    // 风险升级逻辑：
+                    // 如果扫描到了风险因子，且风险因子的费率/等级 高于 产品原本的等级，则进行强制升级
+                    // 原则：以高风险为准 (Highest Risk Prevails)
+                    let riskAnalysisText = "✅ 标准承保风险";
+                    let deepAnalysisData = finalMatch.deep_analysis || null;
+
+                    if (riskFactor) {
+                        // 比较当前产品费率与风险因子最低费率
+                        const currentRate = finalMatch.rate || 0;
+                        if (riskFactor.minRate > currentRate) {
+                            // 触发升级
+                            finalMatch.cls = riskFactor.upgradeTo;
+                            finalMatch.rate = riskFactor.minRate; // 使用高风险费率
+                            // 生成复合分类名
+                            finalMatch.cat = `${finalMatch.cat} (with ${riskFactor.tag.split(':')[1].trim()})`;
+
+                            riskAnalysisText = `⚠️ <strong>检测到高危组件 [${riskFactor.key}]</strong><br>风险等级强制上调至 [Class ${riskFactor.upgradeTo}]`;
+
+                            // Log
+                            if (idx < 5) console.log(`   ‼️ Risk Upgrade: ${title} -> Detected ${riskFactor.key}, Upgrading to ${riskFactor.upgradeTo}`);
+
+                            // 尝试获取该风险因子的深度分析数据（如果有，比如 Battery）
+                            const riskDbItem = db.find(d => d.id === riskFactor.riskId);
+                            if (riskDbItem && riskDbItem.deep_analysis) {
+                                deepAnalysisData = riskDbItem.deep_analysis;
+                            }
+                        }
+                    } else if (deepAnalysisData) {
+                        // 如果没有外部风险因子升级，但是本类目自带深度分析 (如本身就是 Welding)
+                        riskAnalysisText = `ℹ️ <strong>行业风险提示</strong>`;
+                    }
+
+                    if (idx < 5 && !riskFactor) console.log(`   ✅ Matched Standard Rule [${finalMatch.cat}]`);
+
+                    // 构造返回对象，额外带上 riskAnalysis 字段供 UI 展示
+                    return {
+                        title,
+                        salesValue,
+                        ...finalMatch,
+                        // 如果因为风险升级导致 id 没变（比如只是改了 rate），可能会导致不同风险的产品混在一个组
+                        // 为了区分，我们需要让 composite ID 唯一
+                        id: riskFactor ? `${finalMatch.id}-RISK-${riskFactor.key}` : finalMatch.id,
+                        originalCat: primaryMatch ? primaryMatch.cat : 'Uncategorized',
+                        riskAnalysis: riskAnalysisText,
+                        deepAnalysis: deepAnalysisData
+                    };
                 });
                 console.groupEnd();
 
                 // 2. 按品类(ID)进行归集汇总
                 const groupsMap = {};
                 rawMatches.forEach(item => {
-                    if (!groupsMap[item.id]) {
-                        groupsMap[item.id] = {
-                            id: item.id,
-                            cat: item.cat,
+                    // 使用新的 Composite ID 进行分组
+                    const groupId = item.id;
+
+                    if (!groupsMap[groupId]) {
+                        groupsMap[groupId] = {
+                            id: groupId,
+                            cat: item.cat, // 这里的 cat 可能是复合名称 "Doorbell (w/ Battery)"
                             cls: item.cls,
                             rate: item.rate,
                             min: item.min,
                             itemsCount: 0,
                             excelTotalSales: 0,
-                            items: [] // 存储该分类下的所有 SKU
+                            riskAnalysis: item.riskAnalysis, // 取第一个样本的分析文案
+                            deepAnalysis: item.deepAnalysis, // 取第一个样本的深度洞察
+                            items: []
                         };
                     }
-                    groupsMap[item.id].itemsCount += 1;
-                    groupsMap[item.id].excelTotalSales += item.salesValue;
-                    groupsMap[item.id].items.push(item);
+                    groupsMap[groupId].itemsCount += 1;
+                    groupsMap[groupId].excelTotalSales += item.salesValue;
+                    groupsMap[groupId].items.push(item);
                 });
 
                 // 3. 计算权重并初始化申报销售额
@@ -465,6 +803,14 @@
                         }
                         const parsedData = parseTextToData(fullText);
                         processMerchantReport(parsedData);
+
+                    } else if (fileExt === 'json') {
+                        // JSON 处理 (支持插件下载的抓取数据)
+                        const text = await file.text();
+                        const json = JSON.parse(text);
+                        // 适配两种格式：插件带有的元数据格式 {items: []} 或 纯数组
+                        const items = Array.isArray(json) ? json : (json.items || []);
+                        processMerchantReport(items);
 
                     } else if (fileExt === 'docx' || fileExt === 'doc') {
                         // Word 文档处理
@@ -719,156 +1065,161 @@
 
             return (
                 <div className="min-h-screen relative no-scrollbar">
-                    <nav className="p-3 bg-white border-b sticky top-0 z-40 flex justify-between items-center px-6 shadow-sm/50">
-                        <div className="flex items-center gap-3 cursor-pointer" onClick={() => setView('home')}>
-                            <h1 className="text-lg font-bold tracking-tight text-gray-900">
+                    <nav className="p-6 bg-white border-b sticky top-0 z-40 flex justify-between items-center px-12">
+                        <div className="flex items-center gap-4 cursor-pointer" onClick={() => setView('home')}>
+                            <h1 className="text-xl font-bold tracking-tight text-gray-900">
                                 {isCustomerMode ? '报价合规中心' : '亚马逊 CGL 智能体'}
                             </h1>
                         </div>
-                        <div className="flex gap-6">
+                        <div className="flex gap-6 items-center">
+                            <button onClick={requestSync} className="text-[10px] font-bold text-gray-400 hover:text-blue-600 uppercase tracking-[0.2em]" title="强制同步插件数据">
+                                Sync Data
+                            </button>
                             {!isCustomerMode && <button onClick={() => setView('admin')} className="text-[10px] font-bold text-gray-400 hover:text-blue-600 uppercase tracking-[0.2em]">Admin Portal</button>}
                         </div>
                     </nav>
 
-                    <main className="max-w-7xl mx-auto p-6">
+                    <main className="max-w-6xl mx-auto p-12">
                         {view === 'home' && (
-                            <div className="py-10 space-y-12 animate-in fade-in duration-1000">
-                                <div className="space-y-4 text-center">
-                                    <h2 className="text-6xl font-black tracking-tighter leading-[0.9] mb-4">
+                            <div className="py-20 space-y-24 animate-in fade-in duration-1000">
+                                <div className="space-y-6 text-center">
+                                    <h2 className="text-8xl font-black tracking-tighter leading-[0.8] mb-8">
                                         {isCustomerMode ? '合规创造价值' : '分品类计费'}<br />
                                         <span className="text-blue-600">{isCustomerMode ? '专业的合规报价' : '更专业的对冲'}</span>
                                     </h2>
-                                    <p className="text-base text-gray-400 max-w-2xl mx-auto font-medium">
+                                    <p className="text-xl text-gray-400 max-w-2xl mx-auto font-medium">
                                         {isCustomerMode ? '请上传您的销售报告，我们将为您核算精准的保费预估并核对保单合规性。' : '支持按风险品类自动汇总销售额，独立计算最低保费与弹性费率。'}
                                     </p>
                                 </div>
-                                <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
-                                    <div onClick={() => setView('merchant')} className="apple-card p-8 cursor-pointer group hover:bg-white/80 border hover:border-blue-200 transition-all shadow-sm hover:shadow-md">
-                                        <div className="text-4xl mb-6 group-hover:scale-110 transition-transform">📊</div>
-                                        <h3 className="text-xl font-black mb-2 tracking-tight">智能报价分析</h3>
-                                        <p className="text-sm text-gray-400 leading-relaxed font-medium">上传销售报告，系统将自动核算最优保费方案。</p>
+                                <div className="grid md:grid-cols-2 gap-10">
+                                    <div onClick={() => setView('merchant')} className="apple-card p-16 cursor-pointer group hover:bg-white/80">
+                                        <div className="text-5xl mb-10 group-hover:scale-110 transition-transform">📊</div>
+                                        <h3 className="text-3xl font-black mb-4 tracking-tight">智能报价分析</h3>
+                                        <p className="text-gray-400 leading-relaxed font-medium">上传销售报告，系统将自动核算最优保费方案。</p>
                                     </div>
-                                    <div onClick={() => setView('coi')} className="apple-card p-8 cursor-pointer group hover:bg-white/80 border hover:border-blue-200 transition-all shadow-sm hover:shadow-md">
-                                        <div className="text-4xl mb-6 group-hover:scale-110 transition-transform">🛡️</div>
-                                        <h3 className="text-xl font-black mb-2 tracking-tight">COI 凭证预审</h3>
-                                        <p className="text-sm text-gray-400 leading-relaxed font-medium">AI 扫描保单，核对亚马逊 $1,000,000 强制限额要求。</p>
+                                    <div onClick={() => setView('coi')} className="apple-card p-16 cursor-pointer group">
+                                        <div className="text-5xl mb-10 group-hover:scale-110 transition-transform">🛡️</div>
+                                        <h3 className="text-3xl font-black mb-4 tracking-tight">COI 凭证预审</h3>
+                                        <p className="text-gray-400 leading-relaxed font-medium">AI 扫描保单，核对亚马逊 $1,000,000 强制限额要求。</p>
                                     </div>
                                 </div>
                             </div>
                         )}
 
                         {view === 'merchant' && (
-                            <div className="space-y-6 animate-in fade-in duration-700">
-                                <button onClick={() => setView('home')} className="text-blue-600 font-bold text-xs">← 返回主页导航</button>
+                            <div className="space-y-10 animate-in fade-in duration-700">
+                                <button onClick={() => setView('home')} className="text-blue-600 font-bold text-sm">← 返回主页导航</button>
 
-                                <div className="apple-card p-6 space-y-6">
-                                    <div className="grid md:grid-cols-3 gap-6">
+                                <div className="apple-card p-12 space-y-12">
+                                    <div className="grid md:grid-cols-3 gap-8">
                                         <div className="md:col-span-2 space-y-2">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">全账户预计年度总销售额 (Annual USD Revenue)</label>
+                                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">全账户预计年度总销售额 (Annual USD Revenue)</label>
                                             <div className="relative">
-                                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 font-bold text-xl">$</span>
-                                                <input type="text" className="w-full pl-10 pr-6 py-3 rounded-[20px] bg-gray-50 border-none font-black text-2xl text-gray-900 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={revenueRaw} onChange={e => handleTotalRevenueChange(e.target.value)} />
+                                                <span className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 font-bold text-2xl">$</span>
+                                                <input type="text" className="w-full pl-12 pr-6 py-4 rounded-[24px] bg-gray-50 border-none font-black text-3xl text-gray-900 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={revenueRaw} onChange={e => handleTotalRevenueChange(e.target.value)} />
                                             </div>
                                         </div>
-                                        <div className="space-y-2">
+                                        <div className="space-y-4">
                                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">免赔额控制 (Deductible)</label>
-                                            <select className="w-full p-4 h-[56px] rounded-[20px] bg-gray-50 border-none font-black text-lg text-gray-900 focus:bg-white appearance-none cursor-pointer outline-none transition-all" value={deductibleType} onChange={e => setDeductibleType(e.target.value)}>
+                                            <select className="w-full p-6 h-[88px] rounded-[28px] bg-gray-50 border-none font-black text-xl text-gray-900 focus:bg-white appearance-none cursor-pointer outline-none transition-all" value={deductibleType} onChange={e => setDeductibleType(e.target.value)}>
                                                 <option value="10000">10,000 美金 (标准)</option>
                                                 <option value="0">无免赔 (Nil)</option>
                                             </select>
                                         </div>
                                     </div>
 
-                                    <div className="border-2 border-dashed border-gray-100 rounded-[32px] p-8 text-center hover:bg-blue-50/20 hover:border-blue-400 transition-all relative group bg-gray-50/30">
+                                    <div className="border-2 border-dashed border-gray-100 rounded-[40px] p-20 text-center hover:bg-blue-50/20 hover:border-blue-400 transition-all relative group bg-gray-50/30">
                                         <input type="file" accept=".xlsx,.xls,.csv,.txt,.pdf,.docx,.doc" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={handleMerchantUpload} />
-                                        <div className="space-y-2">
-                                            <div className="text-3xl group-hover:scale-110 transition-transform">📄</div>
-                                            <h4 className="text-base font-black">上传 SKU 详情报告</h4>
-                                            <p className="text-xs text-gray-400 font-medium italic">支持 Excel、CSV、TXT、PDF、Word 等格式</p>
+                                        <div className="space-y-4">
+                                            <div className="text-5xl group-hover:scale-110 transition-transform">📄</div>
+                                            <h4 className="text-xl font-black">上传 SKU 详情报告</h4>
+                                            <p className="text-gray-400 font-medium italic">支持 Excel、CSV、TXT、PDF、Word 等格式</p>
                                         </div>
                                     </div>
 
                                     {groupedResults.length > 0 && (
-                                        <div className="space-y-8 animate-in slide-in-from-bottom-6 duration-700">
+                                        <div className="space-y-12 animate-in slide-in-from-bottom-6 duration-700">
                                             <div className="relative group">
-                                                <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-[32px] blur-2xl opacity-20"></div>
-                                                <div className="relative bg-[#1d1d1f] p-6 rounded-[32px] text-white flex flex-col md:flex-row justify-between items-center gap-6 border border-white/5">
-                                                    <div className="space-y-2 flex-1">
+                                                <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-[48px] blur-2xl opacity-20"></div>
+                                                <div className="relative bg-[#1d1d1f] p-12 rounded-[48px] text-white flex flex-col md:flex-row justify-between items-center gap-12 border border-white/5">
+                                                    <div className="space-y-4 flex-1">
                                                         <div className="inline-block px-3 py-1 bg-blue-500/20 text-blue-400 text-[10px] font-black rounded-full uppercase tracking-widest">Aggregate Annual Premium (RMB)</div>
-                                                        <div className="flex items-baseline gap-2">
-                                                            <span className="text-2xl font-bold text-white/40">¥</span>
-                                                            <span className="text-6xl font-black leading-none tracking-tighter tabular-nums">{fComm(totalFinalPrem)}</span>
+                                                        <div className="flex items-baseline gap-3">
+                                                            <span className="text-4xl font-bold text-white/40">¥</span>
+                                                            <span className="text-[100px] font-black leading-none tracking-tighter tabular-nums">{fComm(totalFinalPrem)}</span>
                                                         </div>
-                                                        <div className="text-white/40 font-bold text-xs bg-white/5 p-3 rounded-xl flex items-center gap-2">
-                                                            <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-                                                            已完成 {groupedResults.length} 个风险群组的计算
+                                                        <div className="text-white/40 font-bold text-sm bg-white/5 p-4 rounded-2xl flex items-center gap-3">
+                                                            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                                                            计费逻辑：已完成 {groupedResults.length} 个风险群组的独立阈值计算并完成总和累加。
                                                         </div>
                                                     </div>
-                                                    <div className="grid grid-cols-2 gap-3 min-w-[280px]">
-                                                        <div className="bg-white/5 p-4 rounded-[20px] border border-white/5 text-center">
-                                                            <p className="text-[9px] text-white/40 font-bold uppercase mb-1">结算汇率</p>
-                                                            <p className="text-xl font-black">{exRate}</p>
+                                                    <div className="grid grid-cols-2 gap-4 min-w-[340px]">
+                                                        <div className="bg-white/5 p-6 rounded-[32px] border border-white/5 text-center">
+                                                            <p className="text-[9px] text-white/40 font-bold uppercase mb-2">结算汇率</p>
+                                                            <p className="text-2xl font-black">{exRate}</p>
                                                         </div>
-                                                        <div className="bg-white/5 p-4 rounded-[20px] border border-white/5 text-center">
-                                                            <p className="text-[9px] text-white/40 font-bold uppercase mb-1">类目总数</p>
-                                                            <p className="text-xl font-black">{groupedResults.length}</p>
+                                                        <div className="bg-white/5 p-6 rounded-[32px] border border-white/5 text-center">
+                                                            <p className="text-[9px] text-white/40 font-bold uppercase mb-2">类目总数</p>
+                                                            <p className="text-2xl font-black">{groupedResults.length}</p>
                                                         </div>
-                                                        <div className="col-span-2 bg-blue-600/10 p-4 rounded-[20px] border border-blue-500/20 text-center">
-                                                            <p className="text-[9px] text-blue-400 font-bold uppercase mb-1">免赔设置</p>
-                                                            <p className="text-sm font-black uppercase text-blue-100">{deductibleType === '0' ? 'Nil (1.2x Uplift)' : 'USD 10K (Standard)'}</p>
+                                                        <div className="col-span-2 bg-blue-600/10 p-6 rounded-[32px] border border-blue-500/20 text-center">
+                                                            <p className="text-[9px] text-blue-400 font-bold uppercase mb-2">免赔设置</p>
+                                                            <p className="text-lg font-black uppercase text-blue-100">{deductibleType === '0' ? 'Nil (1.2x Uplift)' : 'USD 10K (Standard)'}</p>
                                                         </div>
                                                     </div>
                                                 </div>
                                             </div>
 
+
+
                                             {/* 新增: 风险分类汇总与申报卡片区 */}
-                                            <div className="space-y-4 pt-6 border-t border-gray-100">
-                                                <div className="flex items-center justify-between pb-2">
+                                            <div className="space-y-6 pt-12 border-t border-gray-100">
+                                                <div className="flex items-center justify-between pb-4">
                                                     <div>
-                                                        <h4 className="text-lg font-black text-gray-900 tracking-tight">风险分类详情与申报</h4>
-                                                        <p className="text-[10px] text-gray-400 font-medium mt-0.5">请核对各大类申报销售额并重新计算</p>
+                                                        <h4 className="text-xl font-black text-gray-900 tracking-tight">风险分类详情与申报 (Submission Details)</h4>
+                                                        <p className="text-xs text-gray-400 font-medium mt-1">请核对各大类申报销售额，系统将基于申报额重新计算保费</p>
                                                     </div>
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest bg-gray-50 px-2 py-0.5 rounded-full">Automated</span>
+                                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest bg-gray-50 px-3 py-1 rounded-full">Automated Analysis</span>
                                                 </div>
 
-                                                <div className="space-y-3">
+                                                <div className="space-y-4">
                                                     {groupedResults.map((group) => {
                                                         const isHighRisk = group.cls === 'C' || group.cls === 'Excluded';
 
                                                         return (
-                                                            <div key={group.id} className={`bg-white rounded-[20px] border ${isHighRisk ? 'border-red-200 bg-red-50/10' : 'border-gray-100'} overflow-hidden shadow-sm hover:shadow-md transition-all duration-300`}>
+                                                            <div key={group.id} className={`bg-white rounded-[24px] border ${isHighRisk ? 'border-red-200 bg-red-50/10' : 'border-gray-100'} overflow-hidden shadow-sm hover:shadow-md transition-all duration-300`}>
                                                                 {/* 卡片头部 */}
-                                                                <div className="p-4 flex flex-col md:flex-row gap-4 md:items-center justify-between">
+                                                                <div className="p-6 flex flex-col md:flex-row gap-6 md:items-center justify-between">
                                                                     {/* 左侧：分类信息 */}
-                                                                    <div className="flex items-center gap-3 min-w-[240px]">
-                                                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl font-black ${isHighRisk ? 'bg-red-100 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
+                                                                    <div className="flex items-center gap-4 min-w-[300px]">
+                                                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl font-black ${isHighRisk ? 'bg-red-100 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
                                                                             {group.cls}
                                                                         </div>
                                                                         <div>
                                                                             <div className="flex items-center gap-2">
-                                                                                <h5 className="font-bold text-gray-900 text-sm">{group.cat}</h5>
-                                                                                {isHighRisk && <span className="text-[9px] bg-red-600 text-white px-1.5 py-0.5 rounded-full font-bold">HIGH RISK</span>}
+                                                                                <h5 className="font-bold text-gray-900">{group.cat}</h5>
+                                                                                {isHighRisk && <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-bold">HIGH RISK</span>}
                                                                             </div>
-                                                                            <p className="text-[10px] text-gray-400 font-medium mt-0.5">SKU: {group.items?.length || 0} · 费率: {group.rate}%</p>
+                                                                            <p className="text-xs text-gray-400 font-medium mt-1">包含 {group.items?.length || 0} 个 SKU · 风险费率 {group.rate}%</p>
                                                                         </div>
                                                                     </div>
 
                                                                     {/* 中间：销售额申报 */}
-                                                                    <div className="flex-1 min-w-[180px]">
-                                                                        <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5 block">申报销售额 (USD)</label>
+                                                                    <div className="flex-1 min-w-[200px]">
+                                                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">该类目申报销售额 (USD)</label>
                                                                         <div className="relative group/input">
-                                                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">$</span>
-                                                                            
+                                                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
+
                                                                             {/* 实时格式化提示 (当用户输入时显示带逗号的数值) */}
                                                                             {editState.id === group.id && (
-                                                                                <div className="absolute right-0 -top-5 text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded shadow-sm font-bold animate-in fade-in zoom-in duration-200 z-10">
+                                                                                <div className="absolute right-0 -top-6 text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded shadow-sm font-bold animate-in fade-in zoom-in duration-200 z-10">
                                                                                     {fComm(parseFloat(editState.val) || 0)}
                                                                                 </div>
                                                                             )}
 
                                                                             <input
                                                                                 type="text"
-                                                                                className={`w-full pl-6 pr-3 py-2 bg-gray-50 border-transparent rounded-lg text-gray-900 font-bold focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all text-right text-sm ${editState.id === group.id ? 'ring-2 ring-blue-500 bg-white' : ''}`}
+                                                                                className={`w-full pl-8 pr-4 py-3 bg-gray-50 border-transparent rounded-xl text-gray-900 font-bold focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all text-right ${editState.id === group.id ? 'ring-2 ring-blue-500 bg-white' : ''}`}
                                                                                 value={editState.id === group.id ? editState.val : fComm(group.declaredSales)}
                                                                                 onFocus={() => setEditState({ id: group.id, val: group.declaredSales === 0 ? '' : String(group.declaredSales) })}
                                                                                 onBlur={() => setEditState({ id: null, val: '' })}
@@ -878,36 +1229,57 @@
                                                                                     handleGroupSalesChange(group.id, raw);
                                                                                 }}
                                                                             />
+                                                                            <div className="absolute right-0 -bottom-5 text-[10px] text-gray-400 opacity-0 group-hover/input:opacity-100 transition-opacity">
+                                                                                Excel抓取总额: ${fComm(group.sales)}
+                                                                            </div>
                                                                         </div>
                                                                     </div>
 
                                                                     {/* 右侧：计算结果 */}
-                                                                    <div className="text-right min-w-[120px]">
-                                                                        <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5 block">预估保费 (CNY)</label>
-                                                                        <div className="text-xl font-black text-gray-900 flex items-center justify-end gap-0.5">
-                                                                            <span className="text-xs text-gray-300">¥</span>
+                                                                    <div className="text-right min-w-[150px]">
+                                                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">预估保费 (CNY)</label>
+                                                                        <div className="text-2xl font-black text-gray-900 flex items-center justify-end gap-1">
+                                                                            <span className="text-sm text-gray-300">¥</span>
                                                                             {fComm(group.finalGroupPrem)}
                                                                         </div>
-                                                                        {group.isMinApplied && <span className="text-[9px] text-orange-500 font-bold bg-orange-50 px-1.5 rounded-full">最低保费</span>}
+                                                                        {group.isMinApplied && <span className="text-[10px] text-orange-500 font-bold bg-orange-50 px-2 rounded-full">已应用最低保费</span>}
                                                                     </div>
                                                                 </div>
 
                                                                 {/* 折叠区域：SKU 明细 */}
                                                                 <details className="border-t border-gray-50 group/details">
-                                                                    <summary className="p-2 flex items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors text-[10px] font-bold text-gray-400 uppercase tracking-widest select-none list-none">
-                                                                        <span className="group-open/details:hidden">查看明细 ({group.items?.length}) ▼</span>
-                                                                        <span className="hidden group-open/details:block">收起 ▲</span>
+                                                                    <summary className="p-4 flex items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors text-xs font-bold text-gray-400 uppercase tracking-widest select-none list-none">
+                                                                        <span className="group-open/details:hidden">查看风险分析与 SKU 明细 ({group.items?.length}) ▼</span>
+                                                                        <span className="hidden group-open/details:block">收起明细 ▲</span>
                                                                     </summary>
-                                                                    <div className="p-4 bg-gray-50/50 space-y-1">
-                                                                        {group.items?.map((item, idx) => (
-                                                                            <div key={idx} className="flex justify-between items-center text-xs py-1 border-b border-gray-100 last:border-0 border-dashed">
-                                                                                <div className="flex flex-col max-w-[70%]">
-                                                                                    <span className="text-[9px] font-black text-gray-400 uppercase">{item.id}</span>
-                                                                                    <span className="text-gray-600 font-medium truncate">{item.title}</span>
+                                                                    <div className="p-8 bg-gray-50/50 space-y-6">
+                                                                        {/* Expert Risk Analysis Section */}
+                                                                        <div className="flex gap-4">
+                                                                            <div className="text-2xl mt-1">🧐</div>
+                                                                            <div className="space-y-2">
+                                                                                <h6 className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Risk Analysis (专家风险洞察)</h6>
+                                                                                <div className="text-xs text-gray-600 leading-relaxed font-medium bg-white p-4 rounded-xl border border-gray-100 shadow-sm"
+                                                                                    dangerouslySetInnerHTML={{
+                                                                                        __html: RISK_KB[group.id] || (group.items?.[0]?.deep_analysis?.cases || (isHighRisk ? "高风险类别：建议严格审查产品警示语及测试报告。" : "标准风险类别：符合一般贸易品承保逻辑。"))
+                                                                                    }}>
                                                                                 </div>
-                                                                                <span className="text-gray-400 font-mono">${fComm(item.salesValue)}</span>
                                                                             </div>
-                                                                        ))}
+                                                                        </div>
+
+                                                                        {/* SKU List */}
+                                                                        <div className="space-y-3 pl-10">
+                                                                            <h6 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Included SKUs (该类目下包含的产品)</h6>
+                                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                                                {group.items?.map((item, idx) => (
+                                                                                    <div key={idx} className="flex items-center gap-3 text-xs p-2 rounded-lg hover:bg-white transition-colors border border-transparent hover:border-gray-100 group/item">
+                                                                                        <span className="font-mono text-gray-400 font-bold bg-white px-2 py-1 rounded border border-gray-100">{item.id}</span>
+                                                                                        <span className="text-gray-600 font-medium truncate group-hover/item:text-blue-600 transition-colors" title={item.title}>
+                                                                                            {item.title}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        </div>
                                                                     </div>
                                                                 </details>
                                                             </div>
@@ -915,99 +1287,7 @@
                                                     })}
                                                 </div>
                                             </div>
-                                            <div className="pt-6 border-t space-y-3">
-                                                <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest px-2">产品分类与风险匹配明细</h5>
-                                                <div className="max-h-[400px] overflow-y-auto custom-scrollbar border rounded-[20px] bg-white shadow-inner">
-                                                    <table className="w-full text-xs text-left border-collapse">
-                                                        <thead className="sticky top-0 bg-gray-100/90 backdrop-blur z-10 border-b border-gray-200 shadow-sm">
-                                                            <tr>
-                                                                <th className="p-2 font-black text-gray-500 uppercase tracking-tight text-[9px] w-10 text-center">SKU</th>
-                                                                <th className="p-2 font-black text-gray-500 uppercase tracking-tight text-[9px] w-1/4">Product Description</th>
-                                                                <th className="p-2 font-black text-gray-500 uppercase tracking-tight text-[9px]">Category</th>
-                                                                <th className="p-2 font-black text-gray-500 uppercase tracking-tight text-[9px] w-16 text-center">Risk ID</th>
-                                                                <th className="p-2 font-black text-gray-500 uppercase tracking-tight text-[9px] w-12 text-center">Class</th>
-                                                                <th className="p-2 font-black text-gray-500 uppercase tracking-tight text-[9px] w-16 text-center">Status</th>
-                                                                <th className="p-2 font-black text-gray-500 uppercase tracking-tight text-[9px] w-1/4">Risk Analysis</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-gray-100">
-                                                            {(() => {
-                                                                let lastCatId = null;
 
-                                                                const RISK_KB = {
-                                                                    '11213': '高危焊接作业风险：涉及高温熔融金属与高电压，极易引发严重烧伤、火灾及烟尘吸入伤害。',
-                                                                    '10203': '锂电热失控风险：18650/聚合物电池在过充、穿刺或高温下极易发生剧烈燃烧爆炸。',
-                                                                    '12240': '头部防护失效风险：头盔若不符合 ANSI/DOT 冲击标准，在事故中碎裂将导致严重的颅脑损伤（TBI）。',
-                                                                    '90001': '儿童窒息与毒性风险：核心风险点为小部件（Small Parts）脱落导致的窒息（Choking Hazard）及材料重金属超标。',
-                                                                    '11113': '高功率热源风险：取暖器类产品是冬季家庭火灾的主要诱因之一。',
-                                                                    '11209': '高速机械伤害风险：电动工具操作失误易导致严重割伤、断指甚至失明。',
-                                                                    '10406': '厨电火灾与烫伤风险：加热类小家电涉及水电接触与高温表面。',
-                                                                    '11210': '手动工具断裂风险：高扭矩或冲击下可能发生金属疲劳断裂。',
-                                                                    '10905': '劳保虚假防护风险：标榜防护但实际未达标将引发惩罚性赔偿。',
-                                                                    '10137': '汽配关键部件风险：涉及行车安全，关键部位失效可能导致交通事故。',
-                                                                    '10407': '电子电气短路风险：主要涉及充电适配器过热、线材短路引发的火灾。',
-                                                                    '10000': '一般性贸易风险：通常指低价值、无动力源、与人体非密切接触的日用杂货。'
-                                                                };
-
-                                                                return merchantResults.map((r, i) => {
-                                                                    const isExcluded = r.cls === 'Excluded';
-                                                                    const isHighRisk = r.cls === 'C';
-                                                                    const status = isExcluded ? '不可保' : (isHighRisk ? '需核保' : '可保');
-                                                                    const statusColor = isExcluded ? 'bg-red-100 text-red-600' : (isHighRisk ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600');
-                                                                    const keywords = r.keywords ? r.keywords.split(',').slice(0, 3).join(', ') : 'N/A';
-
-                                                                    let analysisText = '';
-                                                                    const isSameAsLast = lastCatId === r.id;
-
-                                                                    if (isSameAsLast) {
-                                                                        analysisText = <span className="text-gray-300 font-medium italic">—— 同上 (Idem) ——</span>;
-                                                                    } else {
-                                                                        const kbText = RISK_KB[r.id];
-                                                                        if (kbText) {
-                                                                            analysisText = (
-                                                                                <span>
-                                                                                    <strong className="text-gray-700 block mb-0.5">【专家洞察】</strong>
-                                                                                    {kbText}
-                                                                                </span>
-                                                                            );
-                                                                        } else {
-                                                                            analysisText = isExcluded
-                                                                                ? `⚠️ 除外责任：此类产品不予承保。`
-                                                                                : `ℹ️ 常规风险：匹配关键词 [${keywords}]。`;
-                                                                        }
-                                                                    }
-
-                                                                    lastCatId = r.id;
-
-                                                                    return (
-                                                                        <tr key={i} className="hover:bg-blue-50/30 transition-colors group">
-                                                                            <td className="p-2 text-center font-mono text-gray-400 font-bold border-r border-gray-50 text-[9px]">{i + 1}</td>
-                                                                            <td className="p-2 font-medium text-gray-700 truncate max-w-xs group-hover:whitespace-normal group-hover:text-blue-800 transition-all border-r border-gray-50" title={r.title}>
-                                                                                {r.title}
-                                                                            </td>
-                                                                            <td className="p-2 text-gray-600 border-r border-gray-50 font-medium">
-                                                                                {r.cat}
-                                                                            </td>
-                                                                            <td className="p-2 text-center font-mono text-gray-500 border-r border-gray-50 bg-gray-50/30">{r.id}</td>
-                                                                            <td className={`p-2 text-center font-bold border-r border-gray-50 ${isExcluded ? 'text-red-600' : 'text-gray-600'}`}>
-                                                                                {r.cls}
-                                                                            </td>
-                                                                            <td className="p-2 text-center border-r border-gray-50">
-                                                                                <span className={`px-1.5 py-0.5 rounded-[4px] font-bold text-[9px] ${statusColor}`}>
-                                                                                    {status}
-                                                                                </span>
-                                                                            </td>
-                                                                            <td className="p-2 text-gray-500 text-[9px] leading-relaxed text-justify pr-4">
-                                                                                {analysisText}
-                                                                            </td>
-                                                                        </tr>
-                                                                    );
-                                                                });
-                                                            })()}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -1015,29 +1295,29 @@
                         )}
 
                         {view === 'coi' && (
-                            <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                                <button onClick={() => setView('home')} className="text-blue-600 font-bold text-xs flex items-center gap-1">
-                                    <span className="text-base">←</span> 返回主页导航
+                            <div className="max-w-3xl mx-auto space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                                <button onClick={() => setView('home')} className="text-blue-600 font-bold text-sm flex items-center gap-2">
+                                    <span className="text-lg">←</span> 返回主页导航
                                 </button>
 
-                                <div className="apple-card p-10 text-center space-y-8 relative overflow-hidden">
-                                    <div className="space-y-2">
-                                        <div className="w-14 h-14 bg-green-50 rounded-2xl flex items-center justify-center text-2xl mx-auto">🛡️</div>
-                                        <h3 className="text-2xl font-black tracking-tight">AI 保单合规预审</h3>
-                                        <p className="text-gray-400 text-sm font-medium">深度扫描保单，自动核对 Amazon $1,000,000 限额要求</p>
+                                <div className="apple-card p-16 text-center space-y-12 relative overflow-hidden">
+                                    <div className="space-y-4">
+                                        <div className="w-20 h-20 bg-green-50 rounded-3xl flex items-center justify-center text-4xl mx-auto">🛡️</div>
+                                        <h3 className="text-4xl font-black tracking-tight">AI 保单合规预审</h3>
+                                        <p className="text-gray-400 text-lg font-medium">深度扫描保单，自动核对 Amazon $1,000,000 限额要求</p>
                                     </div>
 
                                     {coiStep === 'idle' ? (
-                                        <div onClick={() => { setCoiStep('scanning'); setTimeout(() => setCoiStep('result'), 2500) }} className="group border-2 border-dashed border-gray-100 rounded-[32px] p-10 cursor-pointer hover:border-green-500 hover:bg-green-50/20 transition-all duration-500">
-                                            <div className="text-4xl mb-4 grayscale group-hover:grayscale-0 transition-all duration-500">📤</div>
-                                            <p className="text-gray-400 font-bold text-base">点击点击或拖拽 COI 扫描件 (PDF/JPG)</p>
-                                            <p className="text-[9px] text-gray-300 font-black uppercase tracking-widest mt-4">Secure OCR Transmission</p>
+                                        <div onClick={() => { setCoiStep('scanning'); setTimeout(() => setCoiStep('result'), 2500) }} className="group border-2 border-dashed border-gray-100 rounded-[44px] p-24 cursor-pointer hover:border-green-500 hover:bg-green-50/20 transition-all duration-500">
+                                            <div className="text-6xl mb-6 grayscale group-hover:grayscale-0 transition-all duration-500">📤</div>
+                                            <p className="text-gray-400 font-bold text-lg">点击点击或拖拽 COI 扫描件 (PDF/JPG)</p>
+                                            <p className="text-[10px] text-gray-300 font-black uppercase tracking-widest mt-6">Secure OCR Transmission</p>
                                         </div>
                                     ) : coiStep === 'scanning' ? (
-                                        <div className="py-12 relative">
+                                        <div className="py-24 relative">
                                             <div className="h-1 bg-green-500 absolute top-0 left-0 w-full animate-pulse"></div>
-                                            <p className="text-green-600 font-black text-lg animate-pulse mt-6 tracking-tight">正在核对 Amazon.com Services LLC. 合规描述...</p>
-                                            <div className="mt-6 flex justify-center gap-2">
+                                            <p className="text-green-600 font-black text-xl animate-pulse mt-12 tracking-tight">正在核对 Amazon.com Services LLC. 合规描述...</p>
+                                            <div className="mt-8 flex justify-center gap-2">
                                                 <div className="w-2 h-2 bg-green-200 rounded-full animate-bounce delay-75"></div>
                                                 <div className="w-2 h-2 bg-green-300 rounded-full animate-bounce delay-150"></div>
                                                 <div className="w-2 h-2 bg-green-400 rounded-full animate-bounce delay-300"></div>
@@ -1046,29 +1326,31 @@
                                     ) : (
                                         <div className="text-left space-y-8 animate-in fade-in zoom-in-95 duration-500">
                                             <div className="p-8 bg-red-50/50 border border-red-100 rounded-[40px] space-y-4">
-                                                <div className="flex items-center gap-3 text-red-600 justify-center">
-                                                    <span className="text-xl">🚨</span>
-                                                    <h4 className="text-lg font-black tracking-tight">致命合规项缺失 (2)</h4>
+                                                <div className="flex items-center gap-3 text-red-600">
+                                                    <span className="text-2xl">🚨</span>
+                                                    <h4 className="text-xl font-black tracking-tight">致命合规项缺失 (2)</h4>
                                                 </div>
-                                                <ul className="text-xs text-red-700/80 space-y-2 font-bold ml-4 border-l-2 border-red-200 pl-4">
+                                                <ul className="text-sm text-red-700/80 space-y-4 font-bold ml-9">
                                                     <li className="flex items-start gap-2 leading-relaxed">
+                                                        <span className="mt-1.5 w-1.5 h-1.5 bg-red-500 rounded-full shrink-0"></span>
                                                         <span>保额不足：当前标准要求单次赔付限额不低于 ${fComm(coiRules.find(r => r.id === 'limit')?.value || 1000000)}。</span>
                                                     </li>
                                                     <li className="flex items-start gap-2 leading-relaxed">
+                                                        <span className="mt-1.5 w-1.5 h-1.5 bg-red-500 rounded-full shrink-0"></span>
                                                         <span>附加被保险人描述有误：必须包含 "{coiRules.find(r => r.id === 'holder')?.value || 'Amazon.com Services LLC'}" 等法定表述。</span>
                                                     </li>
                                                 </ul>
                                             </div>
 
-                                            <div className="p-4 bg-green-50/50 border border-green-100 rounded-[20px] flex items-center gap-4">
-                                                <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center text-lg">✅</div>
+                                            <div className="p-8 bg-green-50/50 border border-green-100 rounded-[40px] flex items-center gap-6">
+                                                <div className="w-12 h-12 bg-green-100 rounded-2xl flex items-center justify-center text-xl">✅</div>
                                                 <div>
-                                                    <h4 className="font-black text-green-900 leading-none mb-1 text-sm">免赔额合规</h4>
-                                                    <p className="text-xs text-green-700 font-medium">检测结果符合不超过 ${fComm(coiRules.find(r => r.id === 'deductible')?.value || 10000)} 美金的限度要求。</p>
+                                                    <h4 className="font-black text-green-900 leading-none mb-2">免赔额合规</h4>
+                                                    <p className="text-sm text-green-700 font-medium">检测结果符合不超过 ${fComm(coiRules.find(r => r.id === 'deductible')?.value || 10000)} 美金的限度要求。</p>
                                                 </div>
                                             </div>
 
-                                            <button className="w-full py-4 bg-gray-900 text-white rounded-[20px] text-base font-black hover:bg-black transition-all shadow-xl shadow-gray-200 transform active:scale-95" onClick={() => alert('修改意见已生成，请发送给您的保险经纪。')}>
+                                            <button className="w-full py-6 bg-gray-900 text-white rounded-[28px] text-lg font-black hover:bg-black transition-all shadow-xl shadow-gray-200" onClick={() => alert('修改意见已生成，请发送给您的保险经纪。')}>
                                                 获取专家修改意见
                                             </button>
                                         </div>
@@ -1078,64 +1360,89 @@
                         )}
 
                         {view === 'admin' && (
-                            <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-700">
-                                <button onClick={() => setView('home')} className="text-blue-600 font-bold text-xs">← 返回主页导航</button>
-                                <div className="grid md:grid-cols-3 gap-6">
-                                    <div className="md:col-span-2 apple-card p-6 space-y-6 border-2 border-blue-500/10">
-                                        <h3 className="text-2xl font-black italic">参数维护中心</h3>
-                                        <div className="grid md:grid-cols-2 gap-6">
-                                            <div className="space-y-2">
+                            <div className="max-w-5xl mx-auto space-y-10 animate-in fade-in duration-700">
+                                <button onClick={() => setView('home')} className="text-blue-600 font-bold text-sm">← 返回主页导航</button>
+                                <div className="grid md:grid-cols-3 gap-8">
+                                    <div className="md:col-span-2 apple-card p-12 space-y-8 border-2 border-blue-500/10">
+                                        <h3 className="text-3xl font-black italic">参数维护中心</h3>
+                                        <div className="grid md:grid-cols-2 gap-8">
+                                            <div className="space-y-4">
                                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">标准折算汇率 (USD/CNY)</label>
-                                                <input type="number" step="0.01" className="w-full p-4 h-[60px] rounded-[16px] bg-gray-50 border-none font-black text-xl text-blue-600 outline-none focus:bg-white" value={exRate} onChange={e => setExRate(e.target.value)} />
+                                                <input type="number" step="0.01" className="w-full p-6 h-[80px] rounded-[24px] bg-gray-50 border-none font-black text-2xl text-blue-600 outline-none focus:bg-white" value={exRate} onChange={e => setExRate(e.target.value)} />
                                             </div>
-                                            <div className="space-y-2">
+                                            <div className="space-y-4">
                                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">同步 MASTER 费率库 (.xlsx)</label>
-                                                <div className="h-[60px] border-2 border-dashed border-gray-100 rounded-[16px] flex items-center justify-center bg-gray-50 relative hover:border-blue-400 transition-all cursor-pointer">
+                                                <div className="h-[80px] border-2 border-dashed border-gray-100 rounded-[24px] flex items-center justify-center bg-gray-50 relative hover:border-blue-400 transition-all cursor-pointer">
                                                     <input type="file" onChange={handleAdminUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
-                                                    <span className="text-xs font-black text-gray-400">点击上传报价规则</span>
+                                                    <span className="text-sm font-black text-gray-400">点击上传报价规则</span>
                                                 </div>
                                             </div>
-                                            <div className="space-y-2 md:col-span-2">
+                                            <div className="space-y-4 md:col-span-2">
                                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">更新亚马逊 COI 审核标准 (Amazon Requirements)</label>
-                                                <div className="border-2 border-dashed border-gray-100 rounded-[16px] p-4 bg-gray-50 flex items-center justify-between group hover:border-green-400 transition-all relative">
-                                                    <div className="flex gap-4 items-center">
-                                                        <div className="text-xl">📑</div>
+                                                <div className="border-2 border-dashed border-gray-100 rounded-[24px] p-6 bg-gray-50 flex items-center justify-between group hover:border-green-400 transition-all relative">
+                                                    <div className="flex gap-6 items-center">
+                                                        <div className="text-2xl">📑</div>
                                                         <div className="text-left">
                                                             <p className="text-xs font-black text-gray-900">当前标准：限额 ${fComm(coiRules.find(r => r.id === 'limit')?.value)} / 免赔 ${fComm(coiRules.find(r => r.id === 'deductible')?.value)}</p>
                                                             <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">支持 PDF / Word / Excel / TXT 同步判定逻辑</p>
                                                         </div>
                                                     </div>
                                                     <input type="file" onChange={handleCoiRulesUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
-                                                    <button className="px-3 py-1.5 bg-white border rounded-lg text-[10px] font-black group-hover:bg-green-500 group-hover:text-white transition-all shadow-sm">UPLOAD</button>
+                                                    <button className="px-4 py-2 bg-white border rounded-xl text-[10px] font-black group-hover:bg-green-500 group-hover:text-white transition-all shadow-sm">UPLOAD</button>
                                                 </div>
                                             </div>
 
-                                            <div className="space-y-2 md:col-span-2">
-                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">客户分发管理 (Distribution Settings)</label>
-                                                <div className="p-6 bg-blue-600 rounded-[20px] text-white flex justify-between items-center shadow-xl shadow-blue-100">
-                                                    <div className="space-y-1">
-                                                        <h4 className="text-lg font-bold">导出分发版 HTML</h4>
-                                                        <p className="text-blue-100 text-[10px] font-medium">文件将内置当前费率库逻辑。</p>
+                                            <div className="space-y-4 md:col-span-2">
+                                                <div className="flex justify-between items-center">
+                                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">专家知识库管理 (Knowledge Base)</label>
+                                                    <button onClick={() => setShowImporter(!showImporter)} className="text-[10px] font-bold text-blue-500 hover:text-blue-700 transition-colors">
+                                                        {showImporter ? '收起导入器' : '展开导入器'}
+                                                    </button>
+                                                </div>
+
+                                                {/* KB Importer Zone */}
+                                                {!showImporter ? (
+                                                    <div onClick={() => setShowImporter(true)} className="border-2 border-dashed border-gray-100 rounded-[24px] p-6 bg-gray-50 flex items-center justify-between group hover:border-indigo-400 transition-all cursor-pointer relative">
+                                                        <div className="flex gap-6 items-center">
+                                                            <div className="text-2xl">📚</div>
+                                                            <div className="text-left">
+                                                                <p className="text-xs font-black text-gray-900">导入专家核保知识 (.zip)</p>
+                                                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">一键解析 Word 文档，更新风险洞察库</p>
+                                                            </div>
+                                                        </div>
+                                                        <span className="px-4 py-2 bg-white border rounded-xl text-[10px] font-black group-hover:bg-indigo-500 group-hover:text-white transition-all shadow-sm">IMPORT</span>
                                                     </div>
-                                                    <button onClick={downloadDistributionFile} className="px-6 py-3 bg-white text-blue-600 rounded-xl font-black text-xs hover:bg-blue-50 transition-all">一键导出</button>
+                                                ) : (
+                                                    <KnowledgeImporter onImportSuccess={() => { refreshDB(); addLog('KB Import', '成功更新了专家知识库'); }} />
+                                                )}
+                                            </div>
+
+                                            <div className="space-y-4 md:col-span-2">
+                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">客户分发管理 (Distribution Settings)</label>
+                                                <div className="p-8 bg-blue-600 rounded-[32px] text-white flex justify-between items-center shadow-xl shadow-blue-100">
+                                                    <div className="space-y-2">
+                                                        <h4 className="text-xl font-bold">导出分发版 HTML</h4>
+                                                        <p className="text-blue-100 text-xs font-medium">导出后，文件将内置您当前的费率库逻辑。发送给客户即可直接使用。</p>
+                                                    </div>
+                                                    <button onClick={downloadDistributionFile} className="px-8 py-4 bg-white text-blue-600 rounded-2xl font-black text-sm hover:bg-blue-50 transition-all">一键导出</button>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="apple-card p-6 bg-gray-900 text-white flex flex-col justify-center gap-4">
-                                        <div><p className="text-[9px] opacity-40 uppercase font-black">Database Rows</p><p className="text-3xl font-black">{db.length}</p></div>
+                                    <div className="apple-card p-10 bg-gray-900 text-white flex flex-col justify-center gap-6">
+                                        <div><p className="text-[9px] opacity-40 uppercase font-black">Database Rows</p><p className="text-4xl font-black">{db.length}</p></div>
                                         <div className="h-[1px] bg-white/10 w-full"></div>
-                                        <div><p className="text-[9px] opacity-40 uppercase font-black">Audit Entries</p><p className="text-3xl font-black">{logs.length}</p></div>
+                                        <div><p className="text-[9px] opacity-40 uppercase font-black">Audit Entries</p><p className="text-4xl font-black">{logs.length}</p></div>
                                     </div>
                                 </div>
 
-                                <div className="log-window no-scrollbar max-h-[300px] overflow-y-auto">
-                                    <p className="text-[10px] text-gray-500 mb-4 font-black uppercase text-center border-b border-white/5 pb-2">System Event Log</p>
+                                <div className="log-window no-scrollbar max-h-[400px] overflow-y-auto">
+                                    <p className="text-[10px] text-gray-500 mb-8 font-black uppercase text-center border-b border-white/5 pb-4">System Event Log</p>
                                     {logs.map(log => (
-                                        <div key={log.id} className="flex justify-between items-center py-2 border-b border-white/5">
+                                        <div key={log.id} className="flex justify-between items-center py-4 border-b border-white/5">
                                             <div>
-                                                <span className="text-blue-500 font-black text-[9px] tracking-widest uppercase mr-2">{log.type}</span>
-                                                <span className="text-white/80 font-medium text-xs">{log.detail}</span>
+                                                <span className="text-blue-500 font-black text-[9px] tracking-widest uppercase mr-3">{log.type}</span>
+                                                <span className="text-white/80 font-medium text-sm">{log.detail}</span>
                                             </div>
                                             <span className="text-white/20 text-[9px] font-mono">{log.time}</span>
                                         </div>

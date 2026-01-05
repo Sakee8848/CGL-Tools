@@ -1,3 +1,4 @@
+console.log("Bridge.js loaded. Initializing iframe communication...");
 const iframe = document.getElementById('appFrame');
 
 // Listen for messages from the sandboxed app
@@ -19,7 +20,7 @@ window.addEventListener('message', function (event) {
 
 function sendDataToApp() {
     // Read both pending uploads and persisted state
-    const keys = ['pendingUpload', 'extractedData', 'cgl_db_v2', 'cgl_audit_logs', 'cgl_ex_rate', 'cgl_coi_rules'];
+    const keys = ['pendingUpload', 'extractedData', 'extractedAt', 'cgl_db_v2', 'cgl_audit_logs', 'cgl_ex_rate', 'cgl_coi_rules'];
 
     chrome.storage.local.get(keys, (result) => {
         // 1. Send Hydration Data
@@ -38,7 +39,7 @@ function sendDataToApp() {
             console.log("Sent hydration state to sandbox");
         }
 
-        // 2. Send Pending Uploads with a small delay to ensure React is ready
+        // 2. Send Pending Uploads OR Extracted Data (Priority: Upload > Extracted)
         setTimeout(() => {
             if (result.pendingUpload) {
                 const msg = {
@@ -48,13 +49,16 @@ function sendDataToApp() {
                 iframe.contentWindow.postMessage(msg, '*');
                 console.log("Sent pendingUpload to sandbox:", result.pendingUpload.name);
             }
-            if (result.extractedData) {
+            else if (result.extractedData) {
                 const msg = {
                     type: 'extractedData',
-                    payload: result.extractedData
+                    payload: {
+                        ...result.extractedData,
+                        extractedAt: result.extractedAt // Inject the timestamp
+                    }
                 };
                 iframe.contentWindow.postMessage(msg, '*');
-                console.log("Sent extractedData to sandbox");
+                console.log("Sent extractedData to sandbox with timestamp:", result.extractedAt);
             }
         }, 500);
     });

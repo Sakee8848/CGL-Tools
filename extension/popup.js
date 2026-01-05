@@ -60,11 +60,31 @@ document.addEventListener('DOMContentLoaded', function () {
                         document.getElementById('extractSales').textContent =
                             '$' + new Intl.NumberFormat('en-US').format(totalSales.toFixed(2));
 
-                        // 保存数据到 storage，供完整版工具使用
+                        // 存储到本地存储，供 full tool 使用 (如果 full tool 有权限)
                         chrome.storage.local.set({
                             extractedData: data,
                             extractedAt: new Date().toISOString()
                         });
+
+                        // 动态添加下载按钮
+                        const resultDiv = document.getElementById('extractResult');
+                        // Remove any existing download button
+                        const oldBtn = document.getElementById('dl-btn');
+                        if (oldBtn) oldBtn.remove();
+
+                        const dlBtn = document.createElement('button');
+                        dlBtn.id = 'dl-btn';
+                        dlBtn.textContent = '📥 下载抓取结果 (.json)';
+                        dlBtn.style.cssText = 'margin-top:10px; width:100%; background:#48bb78; color:white; border:none; padding:8px; border-radius:6px; cursor:pointer; font-size:12px; font-weight:bold;';
+                        dlBtn.onclick = () => {
+                            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `amazon_scrape_${new Date().toISOString().slice(0, 10)}.json`;
+                            a.click();
+                        };
+                        resultDiv.appendChild(dlBtn);
 
                         // 自动变更按钮状态
                         document.getElementById('fullToolBtn').textContent = '打开完整版工具 (数据已就绪)';
