@@ -484,6 +484,7 @@
             const [db, setDb] = useState(() => safeGetItem('cgl_db_v4', DEFAULT_DB));
             const [logs, setLogs] = useState(() => safeGetItem('cgl_audit_logs', []));
             const [exRate, setExRate] = useState(() => safeGetItem('cgl_ex_rate', 7.2));
+            const [customDict, setCustomDict] = useState(() => safeGetItem('cgl_custom_dict', {}));
 
             const [isCustomerMode] = useState(() => new URLSearchParams(window.location.search).get('mode') === 'customer');
 
@@ -1410,14 +1411,116 @@
                                                                         <div className="space-y-3 pl-10">
                                                                             <h6 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Included SKUs (该类目下包含的产品)</h6>
                                                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                                                                {group.items?.map((item, idx) => (
-                                                                                    <div key={idx} className="flex items-center gap-3 text-xs p-2 rounded-lg hover:bg-white transition-colors border border-transparent hover:border-gray-100 group/item">
-                                                                                        <span className="font-mono text-gray-400 font-bold bg-white px-2 py-1 rounded border border-gray-100">{item.id}</span>
-                                                                                        <span className="text-gray-600 font-medium truncate group-hover/item:text-blue-600 transition-colors" title={item.title}>
-                                                                                            {item.title}
-                                                                                        </span>
-                                                                                    </div>
-                                                                                ))}
+                                                                                {group.items?.map((item, idx) => {
+                                                                                    // --- Translation Helper (Localized) ---
+                                                                                    // 1. Built-in Basic Dictionary (Fallback)
+                                                                                    const BASIC_DICT = {
+                                                                                        // Tools & Hardware
+                                                                                        'drill': '钻机', 'saw': '锯', 'grinder': '磨光机', 'sander': '砂光机', 'polisher': '抛光机',
+                                                                                        'wrench': '扳手', 'plier': '钳子', 'screwdriver': '螺丝刀', 'hammer': '锤子', 'mallet': '槌',
+                                                                                        'ratchet': '棘轮', 'socket': '套筒', 'bit': '批头', 'blade': '刀片', 'disc': '磨盘',
+                                                                                        'clamp': '夹具', 'vise': '虎钳', 'tool': '工具', 'set': '套装', 'kit': '套件',
+                                                                                        'screw': '螺丝', 'bolt': '螺栓', 'nut': '螺母', 'washer': '垫圈', 'nail': '钉子',
+                                                                                        'hook': '挂钩', 'hinge': '铰链', 'lock': '锁', 'knob': '旋钮', 'handle': '把手',
+                                                                                        // Security & Smart Home
+                                                                                        'alarm': '报警器', 'security': '安防', 'camera': '摄像头', 'system': '系统', 'sensor': '传感器',
+                                                                                        'detector': '探测器', 'smart': '智能', 'wifi': 'WiFi', 'remote': '遥控', 'doorbell': '门铃',
+                                                                                        'siren': '警报器', 'keypad': '键盘', 'motion': '移动侦测', 'home': '家居',
+                                                                                        // Electronics & Accessories
+                                                                                        'battery': '电池', 'charger': '充电器', 'cable': '线缆', 'cord': '电源线', 'adapter': '适配器',
+                                                                                        'plug': '插头', 'switch': '开关', 'led': 'LED灯', 'light': '灯', 'lamp': '台灯',
+                                                                                        'holder': '支架', 'mount': '底座', 'stand': '立架', 'case': '保护壳', 'cover': '保护罩',
+                                                                                        'screen': '屏幕', 'display': '显示器', 'mouse': '鼠标', 'keyboard': '键盘', 'pad': '垫',
+                                                                                        // Automotive
+                                                                                        'car': '汽车', 'auto': '汽车', 'motor': '电机', 'engine': '引擎', 'tire': '轮胎', 'wheel': '轮毂',
+                                                                                        'bumper': '保险杠', 'wiper': '雨刮', 'mat': '脚垫', 'dash': '仪表盘', 'seat': '座椅',
+                                                                                        // Kitchen & Household
+                                                                                        'kitchen': '厨房', 'knife': '刀', 'spoon': '勺', 'fork': '叉', 'pan': '平底锅', 'pot': '锅',
+                                                                                        'bottle': '瓶子', 'cup': '杯子', 'mug': '马克杯', 'glass': '玻璃杯', 'plate': '盘子',
+                                                                                        'shelf': '架子', 'rack': '置物架', 'organizer': '收纳盒', 'box': '盒子', 'bag': '袋子',
+                                                                                        'towel': '毛巾', 'brush': '刷子', 'mop': '拖把', 'broom': '扫帚', 'soap': '肥皂',
+                                                                                        'heater': '加热器', 'fan': '风扇', 'air': '空气', 'fryer': '炸锅', 'oven': '烤箱',
+                                                                                        'table': '桌子', 'chair': '椅子', 'cabinet': '柜子', 'bed': '床', 'pillow': '枕头',
+
+                                                                                        // Mother & Baby (Expanded)
+                                                                                        'baby': '婴儿', 'kid': '儿童', 'child': '孩子', 'toddler': '幼儿', 'infant': '婴幼儿',
+                                                                                        'diaper': '尿布', 'wipe': '湿巾', 'bottle': '奶瓶', 'nipple': '奶嘴', 'pacifier': '安抚奶嘴',
+                                                                                        'stroller': '推车', 'crib': '婴儿床', 'carrier': '背带', 'seat': '座椅', 'bib': '围兜',
+                                                                                        'toy': '玩具', 'doll': '玩偶', 'game': '游戏', 'puzzle': '拼图', 'block': '积木',
+                                                                                        'monitor': '监视器', 'lock': '锁', 'gate': '门栏', 'corner': '角', 'guard': '护角',
+
+                                                                                        // Pets (Expanded)
+                                                                                        'pet': '宠物', 'dog': '狗', 'cat': '猫', 'fish': '鱼', 'bird': '鸟',
+                                                                                        'leash': '牵引绳', 'collar': '项圈', 'harness': '背带', 'bowl': '碗', 'feeder': '喂食器',
+                                                                                        'food': '食品', 'treat': '零食', 'toy': '玩具', 'bed': '窝', 'cage': '笼子',
+                                                                                        'litter': '猫砂', 'box': '砂盆', 'brush': '梳子', 'clipper': '推剪', 'shampoo': '香波',
+
+                                                                                        // Sports & Outdoors
+                                                                                        'sport': '运动', 'gym': '健身', 'fitness': '健身', 'yoga': '瑜伽', 'mat': '垫子',
+                                                                                        'ball': '球', 'racket': '球拍', 'bat': '球棒', 'club': '球杆', 'net': '网',
+                                                                                        'tent': '帐篷', 'camp': '露营', 'bag': '睡袋', 'backpack': '背包', 'light': '灯',
+                                                                                        'bike': '自行车', 'cycle': '骑行', 'helmet': '头盔', 'lock': '锁', 'pump': '打气筒',
+                                                                                        'swim': '游泳', 'pool': '泳池', 'goggle': '泳镜', 'fin': '脚蹼', 'suit': '泳衣',
+
+                                                                                        // Beauty & Personal Care
+                                                                                        'beauty': '美妆', 'makeup': '化妆', 'face': '面部', 'eye': '眼部', 'lip': '唇部',
+                                                                                        'hair': '头发', 'brush': '刷子', 'comb': '梳子', 'dryer': '吹风机', 'iron': '卷发棒',
+                                                                                        'nail': '指甲', 'art': '艺术', 'care': '护理', 'skin': '皮肤', 'cream': '霜',
+                                                                                        'shave': '剃须', 'razor': '剃须刀', 'soap': '肥皂', 'bath': '沐浴', 'shower': '淋浴',
+                                                                                        // Safety & Apparel
+                                                                                        'glove': '手套', 'vest': '背心', 'jacket': '夹克', 'coat': '外套', 'boot': '靴子', 'shoe': '鞋',
+                                                                                        'hat': '帽子', 'cap': '鸭舌帽', 'sock': '袜子', 'shirt': '衬衫', 'pant': '裤子',
+                                                                                        'safety': '安全', 'glass': '眼镜', 'goggle': '护目镜', 'protector': '护具', 'guard': '防护罩',
+                                                                                        'face': '面部', 'ear': '耳部', 'knee': '膝盖', 'elbow': '肘部',
+                                                                                        // Materials & Adjectives
+                                                                                        'steel': '钢', 'metal': '金属', 'wood': '木', 'plastic': '塑料', 'leather': '皮革',
+                                                                                        'rubber': '橡胶', 'silicone': '硅胶', 'glass': '玻璃', 'ceramic': '陶瓷',
+                                                                                        'electric': '电动', 'manual': '手动', 'cordless': '无绳', 'pneumatic': '气动',
+                                                                                        'portable': '便携', 'mini': '迷你', 'heavy': '重型', 'duty': '任务', 'pro': '专业',
+                                                                                        'waterproof': '防水', 'resistant': '耐受', 'proof': '防护',
+                                                                                        'winter': '冬季', 'summer': '夏季', 'thermal': '保暖', 'cool': '凉爽',
+                                                                                        'black': '黑', 'white': '白', 'red': '红', 'blue': '蓝'
+                                                                                    };
+
+                                                                                    // 2. Merge with User Custom Dictionary (from State/LocalStorage)
+                                                                                    // To make this work inside map, we rely on the parent state 'customDict' passed down or accessed via closure if defined in App scope.
+                                                                                    // Since this map is inside render, we can access 'customDict' if it is in scope.
+                                                                                    // Assuming 'customDict' is essentially a JSON object like BASIC_DICT.
+
+                                                                                    const FINAL_DICT = { ...BASIC_DICT, ...customDict };
+
+                                                                                    // Simple Smart Translator
+                                                                                    const translateTitle = (text) => {
+                                                                                        if (!text) return "";
+                                                                                        const words = text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/);
+                                                                                        const matches = words
+                                                                                            .map(w => FINAL_DICT[w] || FINAL_DICT[w.replace(/s$/, '')]) // Handle simple plurals
+                                                                                            .filter(Boolean);
+
+                                                                                        if (matches.length === 0) return "";
+                                                                                        // Deduplicate and join
+                                                                                        return [...new Set(matches)].join(' ');
+                                                                                    };
+
+                                                                                    const cnGuess = translateTitle(item.title);
+
+                                                                                    return (
+                                                                                        <div key={idx} className="flex flex-col gap-1 text-xs p-2 rounded-lg hover:bg-white transition-colors border border-transparent hover:border-gray-100 group/item">
+                                                                                            <div className="flex items-center gap-3">
+                                                                                                <span className="font-mono text-gray-400 font-bold bg-white px-2 py-1 rounded border border-gray-100 min-w-[50px] text-center">{item.id}</span>
+                                                                                                <span className="text-gray-600 font-medium truncate group-hover/item:text-blue-600 transition-colors" title={item.title}>
+                                                                                                    {item.title}
+                                                                                                </span>
+                                                                                            </div>
+                                                                                            {/* Chinese Translation Hint */}
+                                                                                            {cnGuess && (
+                                                                                                <div className="pl-[62px] text-[10px] text-blue-500 font-bold flex items-center gap-1 opacity-80">
+                                                                                                    <span className="text-[8px] bg-blue-50 px-1 rounded uppercase">CN</span> {cnGuess}
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    );
+                                                                                })}
                                                                             </div>
                                                                         </div>
                                                                     </div>
@@ -1518,17 +1621,121 @@
                                                 </div>
                                             </div>
                                             <div className="space-y-4 md:col-span-2">
-                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">更新亚马逊 COI 审核标准 (Amazon Requirements)</label>
-                                                <div className="border-2 border-dashed border-gray-100 rounded-[24px] p-6 bg-gray-50 flex items-center justify-between group hover:border-green-400 transition-all relative">
-                                                    <div className="flex gap-6 items-center">
-                                                        <div className="text-2xl">📑</div>
-                                                        <div className="text-left">
-                                                            <p className="text-xs font-black text-gray-900">当前标准：限额 ${fComm(coiRules.find(r => r.id === 'limit')?.value)} / 免赔 ${fComm(coiRules.find(r => r.id === 'deductible')?.value)}</p>
-                                                            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">支持 PDF / Word / Excel / TXT 同步判定逻辑</p>
+                                                <div className="flex justify-between items-center">
+                                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">自定义翻译词典 (Custom Dictionary)</label>
+                                                    <span className="text-[9px] bg-purple-100 text-purple-600 px-2 py-0.5 rounded font-bold">Auto-Learning Active</span>
+                                                </div>
+
+                                                <div className="border-2 border-dashed border-gray-200 rounded-[24px] p-6 bg-gray-50/50 group hover:border-purple-400 transition-all space-y-8">
+
+                                                    {/* 1. Smart Discovery Tool (Top) */}
+                                                    <div className="space-y-4">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 animate-pulse">✨</div>
+                                                                <div>
+                                                                    <h4 className="text-sm font-black text-gray-800">未收录高频词发现 (AI Discovery)</h4>
+                                                                    <p className="text-[9px] text-gray-400 font-bold uppercase">系统自动扫描当前商品库，找出需翻译的生词</p>
+                                                                </div>
+                                                            </div>
+                                                            <span className="text-[9px] text-gray-400 bg-white px-2 py-1 rounded border border-gray-100 shadow-sm">Real-time Analysis</span>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                                            {(() => {
+                                                                // Dynamic analysis of unknown words
+                                                                const wordCounts = {};
+                                                                const ALL_DICT = {
+                                                                    ...{
+                                                                        // Basic Stop List for simple check
+                                                                        ...customDict
+                                                                    }
+                                                                };
+
+                                                                const KNOWN_ROOTS = new Set([
+                                                                    'drill', 'saw', 'grinder', 'sander', 'polisher', 'wrench', 'plier', 'hammer', 'ratchet', 'socket', 'bit', 'blade', 'disc', 'clamp', 'vise', 'tool', 'kit', 'set',
+                                                                    'screw', 'bolt', 'nut', 'washer', 'nail', 'hook', 'hinge', 'lock', 'knob', 'handle',
+                                                                    'alarm', 'security', 'camera', 'system', 'sensor', 'detector', 'smart', 'wifi', 'battery', 'charger', 'cable', 'cord', 'plug', 'switch', 'led', 'light',
+                                                                    'baby', 'diaper', 'wipe', 'bottle', 'stroller', 'crib', 'toy', 'kid', 'pet', 'dog', 'cat', 'leash', 'collar', 'food', 'bowl',
+                                                                    'kitchen', 'knife', 'pan', 'pot', 'cup', 'mug', 'fork', 'spoon',
+                                                                    'pcs', 'pack', 'pair', 'inch', 'cm', 'mm', 'black', 'white', 'red', 'blue', 'green', 'yellow', 'orange', 'purple', 'gray', 'grey',
+                                                                    'and', 'for', 'with', 'the', 'pro', 'max', 'mini', 'plus', 'ultra', 'new', 'old', 'top', 'big', 'small', 'hot'
+                                                                ]);
+
+                                                                db.forEach(group => {
+                                                                    group.items?.forEach(item => {
+                                                                        const words = item.title.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/);
+                                                                        words.forEach(w => {
+                                                                            if (w.length > 2 && !KNOWN_ROOTS.has(w) && !KNOWN_ROOTS.has(w.replace(/s$/, '')) && !customDict[w] && isNaN(w)) {
+                                                                                wordCounts[w] = (wordCounts[w] || 0) + 1;
+                                                                            }
+                                                                        });
+                                                                    });
+                                                                });
+
+                                                                const sorted = Object.entries(wordCounts)
+                                                                    .sort(([, a], [, b]) => b - a)
+                                                                    .slice(0, 12);
+
+                                                                if (sorted.length === 0) return (
+                                                                    <div className="col-span-4 p-4 text-center border border-green-100 rounded-xl bg-green-50/50 flex flex-col items-center justify-center gap-2">
+                                                                        <div className="text-xl text-green-500">✅</div>
+                                                                        <p className="text-xs font-bold text-green-700">完美状态：所有高频词均已收录</p>
+                                                                    </div>
+                                                                );
+
+                                                                return sorted.map(([word, count]) => (
+                                                                    <button
+                                                                        key={word}
+                                                                        onClick={() => {
+                                                                            const input = prompt(`【快速学习】\n请输入单词 "${word}" 的中文意思:`, "");
+                                                                            if (input) {
+                                                                                const newDict = { ...customDict, [word]: input };
+                                                                                setCustomDict(newDict);
+                                                                                safeSetItem('cgl_custom_dict', newDict);
+                                                                            }
+                                                                        }}
+                                                                        className="flex items-center justify-between bg-white hover:bg-purple-500 hover:text-white group px-3 py-2 rounded-xl border border-gray-200 hover:border-purple-500 transition-all shadow-sm text-left"
+                                                                    >
+                                                                        <div>
+                                                                            <div className="font-bold text-xs">{word}</div>
+                                                                            <div className="text-[8px] text-gray-400 group-hover:text-purple-100">Freq: {count}</div>
+                                                                        </div>
+                                                                        <div className="w-5 h-5 rounded-full bg-gray-50 group-hover:bg-white/20 flex items-center justify-center text-gray-400 group-hover:text-white font-bold text-xs">+</div>
+                                                                    </button>
+                                                                ));
+                                                            })()}
                                                         </div>
                                                     </div>
-                                                    <input type="file" onChange={handleCoiRulesUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
-                                                    <button className="px-4 py-2 bg-white border rounded-xl text-[10px] font-black group-hover:bg-green-500 group-hover:text-white transition-all shadow-sm">UPLOAD</button>
+
+                                                    <div className="w-full h-[1px] bg-gray-200"></div>
+
+                                                    {/* 2. Manual Edit Area (Bottom) */}
+                                                    <div className="space-y-4">
+                                                        <div className="flex gap-3 items-start">
+                                                            <div className="text-xl">📖</div>
+                                                            <div>
+                                                                <p className="text-xs font-black text-gray-900">核心词库管理 (Manual Dictionary)</p>
+                                                                <p className="text-[9px] text-gray-400 font-bold uppercase">支持批量粘贴 / 查看所有词汇 (格式: 英文=中文)</p>
+                                                            </div>
+                                                        </div>
+                                                        <textarea
+                                                            className="w-full h-32 p-4 rounded-xl bg-white border border-gray-200 text-xs font-mono text-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                                                            placeholder="drone=无人机&#10;scooter=滑板车"
+                                                            value={Object.entries(customDict || {}).map(([k, v]) => `${k}=${v}`).join('\n')}
+                                                            onChange={(e) => {
+                                                                const text = e.target.value;
+                                                                const newDict = {};
+                                                                text.split('\n').forEach(line => {
+                                                                    const [key, val] = line.split('=');
+                                                                    if (key && val) newDict[key.trim().toLowerCase()] = val.trim();
+                                                                });
+                                                                setCustomDict(newDict);
+                                                                safeSetItem('cgl_custom_dict', newDict);
+                                                            }}
+                                                        />
+                                                    </div>
+
                                                 </div>
                                             </div>
 
@@ -1556,6 +1763,8 @@
                                                     <KnowledgeImporter onImportSuccess={() => { refreshDB(); addLog('KB Import', '成功更新了专家知识库'); }} />
                                                 )}
                                             </div>
+
+
 
                                             <div className="space-y-4 md:col-span-2">
                                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">客户分发管理 (Distribution Settings)</label>
