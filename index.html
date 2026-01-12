@@ -12,6 +12,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.5.1/mammoth.browser.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         body {
             background-color: #F5F5F7;
@@ -54,6 +56,18 @@
     <div id="root"></div>
     <script type="text/babel">
         const { useState, useEffect } = React;
+
+        // Helper to estimate sales from Amazon Best Seller Rank (BSR)
+        // Model: Power Law Distribution
+        // Disclaimer: This is a rough heuristic for estimation purposes only.
+        const estimateAnnualSalesFromBSR = (rank) => {
+            const r = parseInt(rank);
+            if (!r || r <= 0) return 0;
+            // Formula: Monthly Sales ~= 60000 * Rank ^ (-0.85)
+            // Adjusted for broader category average.
+            const monthly = 60000 * Math.pow(r, -0.85);
+            return Math.floor(monthly * 12);
+        };
 
         const fComm = (val) => {
             if (val === undefined || val === null || isNaN(val)) return "0";
@@ -492,6 +506,7 @@
             const [merchantResults, setMerchantResults] = useState([]); // 原始匹配列表
             const [groupedResults, setGroupedResults] = useState([]); // 按品类汇总后的结果
             const [totalFinalPrem, setTotalFinalPrem] = useState(0);
+            const [storeInfo, setStoreInfo] = useState({ name: 'Amazon Store', url: '' }); // 新增：店铺信息状态
 
             // Manual Sync Trigger
             const requestSync = () => {
@@ -607,7 +622,9 @@
                     }
                     // 2. 处理页面抓取数据
                     else if (message.type === 'extractedData') {
-                        const { items, extractedAt } = message.payload;
+                        const { items, extractedAt, storeName, url } = message.payload;
+
+                        if (storeName) setStoreInfo({ name: storeName, url: url || '' });
 
                         // Check if data is fresh (within 5 minutes)
                         const timeDiff = new Date() - new Date(extractedAt);
@@ -661,8 +678,28 @@
                             low.includes('price') || low.includes('销售') || low.includes('金额') || low.includes('价格'));
                     });
 
+                    // 新增：识别 BSR 排名列
+                    const rankKey = keys.find(k => {
+                        const low = k.toLowerCase();
+                        return (low.includes('rank') || low.includes('bsr') || low.includes('排名') || low.includes('best seller'));
+                    });
+
                     const title = row[titleKey] || "未知商品";
-                    const salesValue = parseFloat(String(row[salesKey] || "0").replace(/[^0-9.]/g, '')) || 0;
+                    let salesValue = parseFloat(String(row[salesKey] || "0").replace(/[^0-9.]/g, '')) || 0;
+
+                    // Sales Estimation Logic
+                    const rankValue = rankKey ? parseInt(String(row[rankKey]).replace(/[^0-9]/g, '')) : 0;
+                    let estAnnualSales = 0;
+                    let isEstimated = false;
+
+                    if (rankValue > 0) {
+                        estAnnualSales = estimateAnnualSalesFromBSR(rankValue);
+                        // 如果没有提供真实销售额，则使用预估值
+                        if (salesValue === 0) {
+                            salesValue = 0; // 这里的 salesValue 是 "Excel提供的真实值"，我们不混淆它，而是在后面对比使用
+                            isEstimated = true;
+                        }
+                    }
 
                     // Debug: 打印前5个详情
                     if (idx < 5) console.log(`Processing Item [${idx}]:`, title);
@@ -770,7 +807,10 @@
                     // 构造返回对象，额外带上 riskAnalysis 字段供 UI 展示
                     return {
                         title,
-                        salesValue,
+                        salesValue, // 真实（或Excel提供的）销售额
+                        estAnnualSales, // BSR 预估销售额
+                        rankValue,
+                        isEstimated, // 标记是否有预估数据可用
                         ...finalMatch,
                         // 如果因为风险升级导致 id 没变（比如只是改了 rate），可能会导致不同风险的产品混在一个组
                         // 为了区分，我们需要让 composite ID 唯一
@@ -809,6 +849,7 @@
 
                 // 3. 计算权重并初始化申报销售额
                 const totalExcelSales = rawMatches.reduce((sum, item) => sum + item.salesValue, 0);
+
                 const groupsArray = Object.values(groupsMap).map(group => {
                     // 如果 Excel 没金额，则按产品数量平均分配；如果有金额，按比例分配
                     const weight = totalExcelSales > 0 ? group.excelTotalSales / totalExcelSales : 1 / Object.keys(groupsMap).length;
@@ -818,7 +859,11 @@
                     const allocatedSales = globalRev > 0 ? globalRev * weight : group.excelTotalSales;
 
                     // 初始化 declaredSales (可编辑字段)
-                    const declaredSales = allocatedSales;
+                    // 核心逻辑升级: 如果有 BSR 预估销售额且原销售额为 0，则优先使用 BSR 预估值
+                    const hasEstSales = group.items.some(i => i.isEstimated);
+                    const declaredSales = (group.excelTotalSales === 0 && hasEstSales) ?
+                        group.items.reduce((sum, i) => sum + (i.estAnnualSales || 0), 0) :
+                        allocatedSales;
 
                     const effectiveRate = deductibleType === '0' ? group.rate * 1.2 : group.rate;
                     const effectiveMin = deductibleType === '0' ? group.min * 1.2 : group.min;
@@ -844,13 +889,21 @@
                         finalGroupPrem,
                         isMinApplied: effectiveMin > elasticPrem,
                         isHighRisk, // 标记为高风险
-                        sales: group.excelTotalSales
+                        sales: group.excelTotalSales,
+                        hasEstSales // 标记该组是否包含预估数据
                     };
                 });
 
                 setMerchantResults(rawMatches);
                 setGroupedResults(groupsArray);
                 setTotalFinalPrem(groupsArray.reduce((sum, g) => sum + g.finalGroupPrem, 0));
+
+                // 如果发现使用了 BSR 预估数据，给出提示
+                const totalEst = groupsArray.reduce((sum, g) => sum + (g.hasEstSales ? g.declaredSales : 0), 0);
+                if (totalExcelSales === 0 && totalEst > 0) {
+                    setRevenueRaw(fComm(totalEst)); // 自动填入总额
+                    addLog('System', `已基于 BSR 排名自动预估年度销售额: $${fComm(totalEst)}`);
+                }
             };
             // 优化: 处理组销售额修改 (反向联动总销售额)
             const handleGroupSalesChange = (groupId, newVal) => {
@@ -970,7 +1023,7 @@
                 }
             };
 
-            // 新增：从文本中解析数据的辅助函数 (升级为正则智能匹配模式)
+            // 新增：从文本中解析数据的辅助函数 (升级为正则智能匹配模式 + BSR提取)
             const parseTextToData = (text) => {
                 const lines = text.split('\n').filter(line => line.trim());
                 const parsedData = [];
@@ -983,39 +1036,58 @@
 
                     let description = '';
                     let sales = 0;
+                    let rank = 0;
+
+                    // 策略 0: 尝试提取 BSR 排名 (支持格式: #12,345 或 BSR: 12345)
+                    const rankMatch = content.match(/(?:#|BSR:?|Rank:?)\s?([0-9,]+)/i);
+                    if (rankMatch) {
+                        // 提取后移除掉排名部分，避免干扰描述
+                        rank = parseInt(rankMatch[1].replace(/,/g, '')) || 0;
+                    }
 
                     // 策略 1: Tab 分隔符 (Excel copy-paste 或 TSV 格式)
-                    // 这是最准确的，通常第一列或最长的一列是名称
                     if (content.includes('\t')) {
                         const parts = content.split('\t');
                         // 找最长的一段文本，大概率是产品描述
                         description = parts.reduce((a, b) => a.length > b.length ? a : b, '');
 
                         // 找看起来像金额的列
-                        const moneyPart = parts.find(p => /[\$¥￥]?\s?[0-9,]+\.\d{2}/.test(p) || (p.match(/[0-9]/) && p.length < 10));
+                        const moneyPart = parts.find(p => /[\$¥￥]?\s?[0-9,]+\.\d{2}/.test(p) || (p.match(/[0-9]/) && p.length < 10 && !p.includes('#')));
                         if (moneyPart) {
                             sales = parseFloat(moneyPart.replace(/[^0-9.]/g, '')) || 0;
                         }
+
+                        // 如果Tab分割里有明确的排名列 (数字且不包含.)
+                        if (!rank) {
+                            const rankPart = parts.find(p => /^[0-9,]+$/.test(p.trim()) && p.trim().length < 8 && !p.includes('.'));
+                            if (rankPart) rank = parseInt(rankPart.replace(/,/g, ''));
+                        }
                     }
-                    // 策略 2: 单纯的长文本行 (通常是产品列表)
+                    // 策略 2: 单纯的长文本行
                     else {
+                        // 移除排名部分剩下的文本
+                        let cleanHasRank = content;
+                        if (rankMatch) {
+                            cleanHasRank = content.replace(rankMatch[0], '').trim();
+                        }
+
                         // 如果这一行包含金额格式，尝试分割
-                        const salesMatch = content.match(/[\t\s]+[\$¥￥]?([0-9,]+\.?\d*)$/); // 匹配末尾的金额
+                        const salesMatch = cleanHasRank.match(/[\t\s]+[\$¥￥]?([0-9,]+\.?\d*)$/);
 
                         if (salesMatch) {
                             sales = parseFloat(salesMatch[1].replace(/,/g, '')) || 0;
-                            description = content.replace(salesMatch[0], '').trim();
+                            description = cleanHasRank.replace(salesMatch[0], '').trim();
                         } else {
-                            // 否则，整行都是描述！不要自作聪明去提取 SKU
-                            description = content;
+                            description = cleanHasRank;
                         }
                     }
 
-                    // 过滤掉太短的无意义行 (比如页码、表头)
-                    if (description.length > 3 && !['description', 'product', 'sales', 'sku'].includes(description.toLowerCase())) {
+                    // 过滤掉太短的无意义行
+                    if (description.length > 3 && !['description', 'product', 'sales', 'sku', 'rank'].includes(description.toLowerCase())) {
                         parsedData.push({
                             'Product Description': description,
-                            'Sales': sales
+                            'Sales': sales,
+                            'Rank': rank // 传递 Rank 字段
                         });
                         matchCount++;
                     }
@@ -1205,6 +1277,43 @@
                 }
             };
 
+            // Generate PDF Report
+            const generateRiskReport = async () => {
+                const element = document.getElementById('risk-report-canvas');
+                if (!element) return;
+
+                try {
+                    addLog('System', '正在生成风险分析报告 PDF...');
+                    const canvas = await html2canvas(element, {
+                        scale: 2, // Retina quality
+                        useCORS: true,
+                        backgroundColor: '#fffbf0'
+                    });
+
+                    const imgData = canvas.toDataURL('image/png');
+
+                    // A4 size logic or Mobile Size
+                    // Let's us standard PDF logic
+                    const { jsPDF } = window.jspdf;
+                    const pdf = new jsPDF({
+                        orientation: 'portrait',
+                        unit: 'mm',
+                        format: [100, 180] // Custom mobile-like ratio 
+                    });
+
+                    const pdfWidth = pdf.internal.pageSize.getWidth();
+                    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+                    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                    pdf.save(`CGL_Risk_Report_${storeInfo.name.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.pdf`);
+
+                    addLog('System', '✅ PDF 报告生成成功');
+                } catch (err) {
+                    console.error(err);
+                    alert("生成 PDF 失败: " + err.message);
+                }
+            };
+
             return (
                 <div className="min-h-screen relative no-scrollbar">
                     <nav className="p-6 bg-white border-b sticky top-0 z-40 flex justify-between items-center px-12">
@@ -1324,6 +1433,113 @@
                                                     <span className="text-xs font-bold text-gray-400 uppercase tracking-widest bg-gray-50 px-3 py-1 rounded-full">Automated Analysis</span>
                                                 </div>
 
+                                                {/* PDF Export Button & Hidden Template */}
+                                                <div className="flex justify-end mb-4">
+                                                    <button
+                                                        onClick={() => generateRiskReport()}
+                                                        className="flex items-center gap-2 bg-gradient-to-r from-red-500 to-pink-600 text-white px-4 py-2 rounded-full font-bold text-xs shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5"
+                                                    >
+                                                        <span>📸</span> 生成小红书风风险报告 (Export PDF)
+                                                    </button>
+                                                </div>
+
+                                                {/* Hidden Report Container for Capture */}
+                                                <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+                                                    <div id="risk-report-canvas" className="w-[375px] bg-[#fffbf0] p-6 text-gray-900 font-sans relative overflow-hidden">
+                                                        {/* Decorative Background Elements */}
+                                                        <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-200 rounded-full blur-3xl opacity-50 -mr-10 -mt-10"></div>
+                                                        <div className="absolute bottom-0 left-0 w-40 h-40 bg-pink-200 rounded-full blur-3xl opacity-50 -ml-10 -mb-10"></div>
+
+                                                        {/* Header */}
+                                                        <div className="relative z-10 mb-6">
+                                                            <div className="text-[10px] font-black tracking-[0.3em] text-gray-400 uppercase mb-2">RISK ASSESSMENT</div>
+                                                            <h1 className="text-2xl font-black leading-tight mb-2 text-gray-900 border-l-4 border-black pl-3">
+                                                                {storeInfo.name}<br />
+                                                                <span className="text-red-500">产品合规风控报告</span>
+                                                            </h1>
+                                                            <div className="flex gap-2 text-[9px] font-bold text-gray-500 mt-3">
+                                                                <span className="bg-white px-2 py-1 rounded border border-gray-200 shadow-sm">🗓️ {new Date().toLocaleDateString()}</span>
+                                                                <span className="bg-white px-2 py-1 rounded border border-gray-200 shadow-sm">📦 {groupedResults.reduce((acc, g) => acc + g.itemsCount, 0)} Items Scanned</span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Core Risk Metrics */}
+                                                        <div className="grid grid-cols-2 gap-3 mb-6 relative z-10">
+                                                            <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+                                                                <div className="text-2xl mb-1">🚨</div>
+                                                                <div className="text-xs text-gray-400 font-bold uppercase">High Risk Groups</div>
+                                                                <div className="text-xl font-black text-red-500">
+                                                                    {groupedResults.filter(g => g.cls === 'C' || g.cls === 'Excluded').length}
+                                                                </div>
+                                                            </div>
+                                                            <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+                                                                <div className="text-2xl mb-1">🛡️</div>
+                                                                <div className="text-xs text-gray-400 font-bold uppercase">Avg. Premium Rate</div>
+                                                                <div className="text-xl font-black text-blue-600">
+                                                                    {(groupedResults.reduce((acc, g) => acc + g.rate, 0) / (groupedResults.length || 1)).toFixed(3)}%
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Category Breakdown (No detailed SKUs) */}
+                                                        <div className="space-y-3 mb-6 relative z-10">
+                                                            <h3 className="text-sm font-black border-b pb-2 flex justify-between items-center">
+                                                                <span>📊 风险分布 (Risk Distribution)</span>
+                                                            </h3>
+                                                            {groupedResults.slice(0, 6).map((group, i) => (
+                                                                <div key={i} className="flex items-center justify-between bg-white p-3 rounded-lg shadow-sm border border-gray-50">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <span className={`w-8 h-8 flex items-center justify-center rounded-lg font-black text-xs ${group.cls === 'C' || group.cls === 'Excluded' ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'}`}>
+                                                                            {group.cls}
+                                                                        </span>
+                                                                        <div>
+                                                                            <div className="font-bold text-xs text-gray-800 line-clamp-1 w-32">{group.cat}</div>
+                                                                            <div className="text-[9px] text-gray-400 font-medium">{group.itemsCount} SKU · {group.rate}% Rate</div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="text-right">
+                                                                        {group.cls === 'C' || group.cls === 'Excluded' ?
+                                                                            <span className="text-[9px] bg-red-500 text-white px-2 py-0.5 rounded font-bold">HIGH RISK</span>
+                                                                            : <span className="text-[9px] bg-green-100 text-green-600 px-2 py-0.5 rounded font-bold">PASS</span>
+                                                                        }
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                            {groupedResults.length > 6 && (
+                                                                <div className="text-center text-[10px] text-gray-400 font-medium italic">...以及其他 {groupedResults.length - 6} 个风险组别</div>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Expert Insights (Top 1) */}
+                                                        <div className="bg-gray-900 text-white p-4 rounded-xl shadow-lg relative z-10">
+                                                            <div className="flex items-center gap-2 mb-2">
+                                                                <span className="text-xl">💡</span>
+                                                                <span className="text-xs font-black uppercase tracking-widest text-yellow-400">Expert Observation</span>
+                                                            </div>
+                                                            <div className="text-[10px] leading-relaxed opacity-90 font-medium">
+                                                                {(() => {
+                                                                    // Find the most critical insight
+                                                                    const highRiskGroup = groupedResults.find(g => (g.cls === 'C' || g.cls === 'Excluded') && g.deepAnalysis?.focus);
+                                                                    if (highRiskGroup && highRiskGroup.deepAnalysis) {
+                                                                        // Strip HTML for PDF cleanliness
+                                                                        const focusRaw = highRiskGroup.deepAnalysis.focus.replace(/<[^>]+>/g, '');
+                                                                        return `[${highRiskGroup.cat}]: ${focusRaw.substring(0, 120)}...`;
+                                                                    }
+                                                                    return "根据CGL数据模型，您的产品组合整体风险可控，但仍建议关注高频退货品类的潜在责任风险。";
+                                                                })()}
+                                                            </div>
+                                                            <div className="mt-3 pt-3 border-t border-white/10 flex justify-between items-center">
+                                                                <span className="text-[8px] text-white/40">GENERATED BY CGL AI AGENT</span>
+                                                                <div className="flex gap-1">
+                                                                    <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div>
+                                                                    <div className="w-1.5 h-1.5 rounded-full bg-yellow-500"></div>
+                                                                    <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
                                                 <div className="space-y-4">
                                                     {groupedResults.map((group) => {
                                                         const isHighRisk = group.cls === 'C' || group.cls === 'Excluded';
@@ -1348,7 +1564,14 @@
 
                                                                     {/* 中间：销售额申报 */}
                                                                     <div className="flex-1 min-w-[200px]">
-                                                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">该类目申报销售额 (USD)</label>
+                                                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 flex justify-between items-center">
+                                                                            <span>该类目申报销售额 (USD)</span>
+                                                                            {group.hasEstSales && (
+                                                                                <span className="text-[9px] bg-gradient-to-r from-orange-400 to-red-400 text-white px-2 py-0.5 rounded-full font-black tracking-widest flex items-center gap-1 shadow-sm animate-pulse">
+                                                                                    <span>🪄</span> AUTO-ESTIMATED
+                                                                                </span>
+                                                                            )}
+                                                                        </label>
                                                                         <div className="relative group/input">
                                                                             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
 
@@ -1512,6 +1735,19 @@
                                                                                                     {item.title}
                                                                                                 </span>
                                                                                             </div>
+
+                                                                                            {/* BSR & Sales Estimation Badge (Always visible if Rank exists, for comparison) */}
+                                                                                            {item.rankValue > 0 && (
+                                                                                                <div className="pl-[62px] flex items-center gap-2 mt-1">
+                                                                                                    <div className="flex items-center bg-gray-900 text-white text-[9px] rounded-md overflow-hidden shadow-sm">
+                                                                                                        <span className="px-1.5 py-0.5 font-bold bg-gray-800 text-gray-400">#</span>
+                                                                                                        <span className="px-1.5 py-0.5 font-mono font-bold tracking-tight">{item.rankValue.toLocaleString()}</span>
+                                                                                                    </div>
+                                                                                                    <span className="text-[9px] font-bold text-orange-500 flex items-center gap-1">
+                                                                                                        <span>🪄</span> Est. ${fComm(item.estAnnualSales)}
+                                                                                                    </span>
+                                                                                                </div>
+                                                                                            )}
                                                                                             {/* Chinese Translation Hint */}
                                                                                             {cnGuess && (
                                                                                                 <div className="pl-[62px] text-[10px] text-blue-500 font-bold flex items-center gap-1 opacity-80">

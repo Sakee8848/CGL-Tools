@@ -195,15 +195,10 @@ async function extractAmazonData() {
             // 尝试提取 BSR 排名
             let rank = 0;
             const allText = document.body.innerText;
-            // 增强正则：支持换行、支持中文冒号、支持 Best Sellers Rank 文本后跟数字
-            // 许多页面 BSR 和数字之间有换行符
-            const bsrMatch = allText.match(/(?:Best Sellers Rank|排名|Rank|BSR)[\s\S]{0,50}?[#№]\s?([0-9,]+)/i);
-
+            // 增强正则：支持换行、支持中文冒号
+            const bsrMatch = allText.match(/(?:Best Sellers Rank|排名|Rank|BSR)[\s\S]{0,30}?[#№]\s?([0-9,]+)/i);
             if (bsrMatch) {
                 rank = parseInt(bsrMatch[1].replace(/,/g, ''));
-                console.log('🏆 成功提取到 BSR 排名:', rank);
-            } else {
-                console.log('⚠️ 未能在详情页找到 BSR 排名文本');
             }
 
             results.unshift({ // 使用 unshift 将主商品排在第一位
@@ -284,18 +279,10 @@ async function extractAmazonData() {
         }
     });
 
-    // 提取店铺名称或页面标题
-    const pageTitle = document.title.replace(/Amazon\.com:?|Amazon\.co\.uk:?|:?Amazon|:?Amazon\.\w+/i, '').trim();
-    const storeNameEl = document.querySelector('#channel-header__title') || document.querySelector('.stores-header__title'); // 常见的 Store Header
-
-    // 如果是 Store 页面，优先用 Store Name
-    const cleanStoreName = storeNameEl ? storeNameEl.innerText.trim() : pageTitle;
-
     return {
         url: window.location.href,
         timestamp: new Date().toISOString(),
         pageType: isSeller ? 'seller-central' : 'customer-facing',
-        storeName: cleanStoreName, // 新增店铺名
         itemCount: uniqueResults.length,
         items: uniqueResults
     };
