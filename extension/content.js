@@ -152,10 +152,33 @@ async function extractAmazonData() {
                     if (img && img.alt && img.alt.length > 3) imgAlt = img.alt;
                 }
 
-                // 尝试找标题
+                // 优化 Storefront Title 提取逻辑
+                // 1. 优先尝试常见的 Storefront 标题 Class
+                const storeTitleEl = card.querySelector('div[data-testid="product-grid-title"], .ProductGridItem__Title, span[class*="title"], h3, h2, div[class*="style__title"]');
+                if (storeTitleEl && storeTitleEl.innerText.length > 5) {
+                    title = storeTitleEl.innerText.trim();
+                }
+
+                // 2. 如果没找到，再尝试从容器文本提取，但进行严格过滤
                 if (!title) {
-                    const t = card.innerText.trim();
-                    if (t.length > 3 && t.length < 200) title = t.split('\n')[0];
+                    const fallbackText = card.innerText.trim();
+                    const lines = fallbackText.split('\n');
+
+                    // 过滤掉类似 "Best Seller", "Add to Cart", "See Details", "+20 colors" 等无关短语
+                    const garbage = /^(best seller|add to cart|see details|quick look|shop now|\+\d+|colors|patterns|prime|sponsored)/i;
+
+                    for (const line of lines) {
+                        const cleanLine = line.trim();
+                        if (cleanLine.length > 5 && !garbage.test(cleanLine)) {
+                            title = cleanLine;
+                            break;
+                        }
+                    }
+                }
+
+                // 3. 最后才使用图片 Alt
+                if (!title && imgAlt && !imgAlt.includes('product image')) {
+                    title = imgAlt;
                 }
 
                 // 尝试找价格

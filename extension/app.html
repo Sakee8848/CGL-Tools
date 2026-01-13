@@ -167,9 +167,33 @@
                     cases: `<ul> <li><strong>2021年加州车库火灾案 (赔付 $1.2M)：</strong> 一名业余DIY用户在使用便携式MIG焊机修复围栏时，未注意清理周边的油漆稀释剂抹布。飞溅火花引燃抹布，火势迅速蔓延至整个车库及邻居家。诉讼指控产品未提供足够的"清理作业环境" 警示。</li> <li><strong>2019年伊利诺伊州电击案 (赔付 $850K)：</strong> 工人在潮湿环境下使用廉价逆变焊机，因设备内部绝缘老化漏电，导致其触电身亡。法医鉴定显示设备未达IP23防护等级。</li> <li><strong>2018年纽约烟尘中毒集体诉讼：</strong> 某工业焊机品牌因未在说明书中明确建议佩戴呼吸防护，导致多名工人确诊锰中毒(Manganism)，引发千万级集体索赔。</li> </ul>`,
                     mitigation: "建议：仅承保家用小型设备，必须强制要求 ANSI Z49.1 合规，并在显眼位置张贴 '佩戴呼吸防护' 与 '清理易燃物' 的警告标签。"
                 }
-            }
-
-            ,
+            },
+            {
+                id: '90002',
+                cat: '成人用品/Adult Toys',
+                cls: 'C',
+                rate: 0.015,
+                min: 8000,
+                keywords: 'sex toy,vibrator,dildo,adult novelty,masturbator,prostate massager,cock ring,bondage,anal plug,love egg,wand massager',
+                deep_analysis: {
+                    focus: `<strong>私密部位接触与化学毒性：</strong> 成人用品直接接触人体最敏感的黏膜组织，核心风险在于化学成分迁移与机械性损伤。<ul><li><strong>化学灼伤与致癌：</strong> 廉价TPR/TPE材质常含有邻苯二甲酸酯(Phthalates)，长期接触可能迁移至体内干扰内分泌或诱发癌症。</li><li><strong>异物滞留(Retention)：</strong> 设计不当（通过性差、底座过小）的肛门玩具极易滑入直肠无法取出，导致急诊手术甚至肠穿孔。</li><li><strong>电池与过热：</strong> 贴身使用的震动类产品若发生锂电池热失控，将直接造成严重的人体接触性烧伤。</li></ul>`,
+                    cases: `<ul> <li><strong>2020年直肠异物滞留案：</strong> 用户使用一款无底座设计的按摩塞后滑入直肠，导致结肠穿孔并引发败血症。诉讼指控产品存在严重的“设计缺陷”。</li> <li><strong>2019年邻苯二甲酸酯超标集体诉讼：</strong> 某知名情趣品牌被检测出产品塑化剂超标，且未按加州Prop 65要求贴标，导致数百万美元的和解赔偿。</li> <li><strong>2022年充电震动棒爆炸案：</strong> 产品在充电时内置锂电池爆炸引发火灾，且用户在使用过程中因过热导致局部皮肤二级烧伤。</li> </ul>`,
+                    mitigation: "强烈建议：1. 仅承保使用医用级硅胶(Medical Grade Silicone)或ABS材质的产品。2. 肛门类玩具必须有 flared base (加宽底座) 设计。3. 必须符合 ISO 3533 (森玩具安全标准)。"
+                }
+            },
+            {
+                id: '12060',
+                cat: '内衣与情趣服饰/Lingerie',
+                cls: 'B',
+                rate: 0.0018,
+                min: 4500,
+                keywords: 'lingerie,underwear,bra,panty,thong,stocking,corset,bodysuit,intimate apparel,babydoll,teddy,nightwear',
+                deep_analysis: {
+                    focus: `<strong>皮肤过敏与易燃性：</strong> 虽然风险低于成人玩具，但贴身衣物仍有独特的责任风险。<ul><li><strong>化学过敏(Dermatitis)：</strong> 残留的甲醛（用于固色）、偶氮染料或镍金属扣件，常导致接触性皮炎或严重的全身性过敏反应。</li><li><strong>易燃风险：</strong> 情趣内衣常使用蕾丝、薄纱等化纤材料，若未进行阻燃处理，遭遇明火（如香薰蜡烛）时会瞬间剧烈燃烧并附着在皮肤上，造成深度烧伤。</li><li><strong>机械伤害：</strong> 钢圈(Underwire)刺破面料划伤皮肤，或紧身束胸(Corset)设计不当导致肋骨压迫伤害。</li></ul>`,
+                    cases: `<ul> <li><strong>维多利亚的秘密甲醛诉讼案：</strong> 多名消费者声称穿着该品牌内衣后出现严重的皮疹和疤痕，检测发现面料中甲醛含量超标。</li> <li><strong>2015年睡衣燃烧案：</strong> 一名女士身穿的丝质睡衣被厨房炉火引燃，因面料不符合 16 CFR 1610 易燃性标准，火势失控导致全身40%烧伤。</li> </ul>`,
+                    mitigation: "1. 严格遵守 16 CFR 1610 纺织品易燃性标准。2. 确保金属配件无镍(Nickel Class Free)。3. 必须加贴完整的洗涤与材质标签。"
+                }
+            },
             {
 
                 id: '10203',
@@ -687,23 +711,11 @@
             if (analysis) {
 
                 // Determine if fields are present
-                const focus = analysis.focus ? `<div class="mb-3"><div class="font-bold text-gray-800 mb-1">🎯 核心风险 (Risk Focus)</div><div class="pl-2 border-l-2 border-red-400 bg-red-50/50 p-2 rounded text-gray-700">$ {
-                    analysis.focus
-                }
+                const focus = analysis.focus ? `<div class="mb-3"><div class="font-bold text-gray-800 mb-1">🎯 核心风险 (Risk Focus)</div><div class="pl-2 border-l-2 border-red-400 bg-red-50/50 p-2 rounded text-gray-700">${analysis.focus}</div></div>` : "";
 
-                </div></div>` : "";
+                const cases = analysis.cases ? `<div class="mb-3"><div class="font-bold text-gray-800 mb-1">⚖️ 真实案例 (Real Cases)</div><div class="pl-2 border-l-2 border-amber-400 bg-amber-50/50 p-2 rounded text-gray-700">${analysis.cases}</div></div>` : "";
 
-                const cases = analysis.cases ? `<div class="mb-3"><div class="font-bold text-gray-800 mb-1">⚖️ 真实案例 (Real Cases)</div><div class="pl-2 border-l-2 border-amber-400 bg-amber-50/50 p-2 rounded text-gray-700">$ {
-                    analysis.cases
-                }
-
-                </div></div>` : "";
-
-                const mitigation = analysis.mitigation ? `<div class="mb-1"><div class="font-bold text-gray-800 mb-1">🛡️ 合规建议 (Mitigation)</div><div class="pl-2 border-l-2 border-green-400 bg-green-50/50 p-2 rounded text-gray-700">$ {
-                    analysis.mitigation
-                }
-
-                </div></div>` : "";
+                const mitigation = analysis.mitigation ? `<div class="mb-1"><div class="font-bold text-gray-800 mb-1">🛡️ 合规建议 (Mitigation)</div><div class="pl-2 border-l-2 border-green-400 bg-green-50/50 p-2 rounded text-gray-700">${analysis.mitigation}</div></div>` : "";
 
                 // Fallback for simple string format if legacy data exists
                 if (!focus && !cases && !mitigation && typeof analysis === 'string') {
@@ -724,9 +736,8 @@
             const isLong = contentHTML.length > 200;
 
             return (<div className="w-full" > <div className={
-                `text-xs leading-relaxed font-medium bg-white p-5 rounded-xl border border-gray-100 shadow-sm relative transition-all duration-500 $ {
-                        !expanded && isLong ? 'max-h-40 overflow-hidden mask-bottom' : ''
-                    }
+                `text-xs leading-relaxed font-medium bg-white p-5 rounded-xl border border-gray-100 shadow-sm relative transition-all duration-500 ${!expanded && isLong ? 'max-h-40 overflow-hidden mask-bottom' : ''
+                }
 
                     `
             }
@@ -871,9 +882,10 @@
                 else {
                     // Check if it has specific new fields (e.g. welding deep analysis is an object)
                     const sample = storedV4.find(i => i.id === '11213');
+                    const hasNewCats = storedV4.find(i => i.id === '90002'); // Check for Adult Toys
 
-                    if (!sample || typeof sample.deep_analysis !== 'object') {
-                        console.warn("Detected v4 DB but with old structure. Force updating...");
+                    if (!sample || !hasNewCats || typeof sample.deep_analysis !== 'object') {
+                        console.warn("Detected v4 DB but with old structure or missing categories. Force updating...");
                         setDb(DEFAULT_DB);
                         safeSetItem('cgl_db_v4', DEFAULT_DB);
                     }
@@ -2097,22 +2109,17 @@
 
                                                     <div className="bg-gray-900 text-white p-4 rounded-xl shadow-lg relative z-10" > <div className="flex items-center gap-2 mb-2" > <span className="text-xl" >💡</span> <span className="text-xs font-black uppercase tracking-widest text-yellow-400" >Expert Observation</span> </div> <div className="text-[10px] leading-relaxed opacity-90 font-medium" > {
                                                         (() => {
-                                                            // Find the most critical insight
-                                                            const highRiskGroup = groupedResults.find(g => (g.cls === 'C' || g.cls === 'Excluded') && g.deepAnalysis?.focus);
+                                                            // Find the most critical insight: 1. High Risk, 2. Any group with analysis
+                                                            let highRiskGroup = groupedResults.find(g => (g.cls === 'C' || g.cls === 'Excluded') && g.deepAnalysis?.focus);
+                                                            if (!highRiskGroup) {
+                                                                highRiskGroup = groupedResults.find(g => g.deepAnalysis?.focus);
+                                                            }
 
                                                             if (highRiskGroup && highRiskGroup.deepAnalysis) {
                                                                 // Strip HTML for PDF cleanliness
                                                                 const focusRaw = highRiskGroup.deepAnalysis.focus.replace(/<[^>]+>/g, '');
 
-                                                                return `[$ {
-                                                highRiskGroup.cat
-                                            }
-
-                                            ]: $ {
-                                                focusRaw.substring(0, 120)
-                                            }
-
-                                            ...`;
+                                                                return `[${highRiskGroup.cat}]: ${focusRaw.substring(0, 500)}...`;
                                                             }
 
                                                             return "根据CGL数据模型，您的产品组合整体风险可控，但仍建议关注高频退货品类的潜在责任风险。";
@@ -2325,6 +2332,16 @@
                                                                                     'hair': '头发', 'brush': '刷子', 'comb': '梳子', 'dryer': '吹风机', 'iron': '卷发棒',
                                                                                     'nail': '指甲', 'art': '艺术', 'care': '护理', 'skin': '皮肤', 'cream': '霜',
                                                                                     'shave': '剃须', 'razor': '剃须刀', 'soap': '肥皂', 'bath': '沐浴', 'shower': '淋浴',
+                                                                                    // Beauty & Personal Care
+                                                                                    // Removed Duplicate Block
+
+                                                                                    // Lingerie & Adult
+                                                                                    'lingerie': '情趣内衣', 'underwear': '内裤', 'bra': '文胸', 'panty': '内裤', 'thong': '丁字裤',
+                                                                                    'corset': '束胸衣', 'bodysuit': '连体衣', 'babydoll': '娃娃裙', 'teddy': '连体衣', 'nightwear': '睡衣',
+                                                                                    'sex': '成人', 'toy': '玩具', 'vibrator': '震动棒', 'dildo': '假阴茎', 'masturbator': '自慰杯',
+                                                                                    'adult': '成人', 'novelty': '情趣', 'plug': '塞', 'anal': '后庭', 'bondage': '束缚',
+                                                                                    'women': '女士', 'men': '男士', 'female': '女性', 'male': '男性', 'sexy': '性感',
+                                                                                    'set': '套装', 'lace': '蕾丝', 'mesh': '网眼', 'satin': '缎面', 'silk': '丝绸',
                                                                                     // Safety & Apparel
                                                                                     'glove': '手套', 'vest': '背心', 'jacket': '夹克', 'coat': '外套', 'boot': '靴子', 'shoe': '鞋',
                                                                                     'hat': '帽子', 'cap': '鸭舌帽', 'sock': '袜子', 'shirt': '衬衫', 'pant': '裤子',
@@ -2337,7 +2354,8 @@
                                                                                     'portable': '便携', 'mini': '迷你', 'heavy': '重型', 'duty': '任务', 'pro': '专业',
                                                                                     'waterproof': '防水', 'resistant': '耐受', 'proof': '防护',
                                                                                     'winter': '冬季', 'summer': '夏季', 'thermal': '保暖', 'cool': '凉爽',
-                                                                                    'black': '黑', 'white': '白', 'red': '红', 'blue': '蓝'
+                                                                                    'black': '黑', 'white': '白', 'red': '红', 'blue': '蓝', 'pink': '粉', 'purple': '紫',
+                                                                                    'green': '绿', 'yellow': '黄', 'orange': '橙', 'rose': '玫瑰红'
                                                                                 }
 
                                                                                     ;
